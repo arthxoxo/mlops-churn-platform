@@ -1,0 +1,50 @@
+# ── Project ───────────────────────────────────────────────────────────────────
+project:
+  name: mlops-churn-platform
+  version: "1.0.0"
+  description: "Full MLOps platform for customer churn prediction"
+
+# ── AWS ───────────────────────────────────────────────────────────────────────
+aws:
+  region: us-east-1
+  s3_bucket: your-mlops-bucket        # <-- change this
+  sagemaker_role_arn: arn:aws:iam::YOUR_ACCOUNT_ID:role/SageMakerRole  # <-- change this
+  ecr_repository: mlops-churn-platform
+
+# ── Data ──────────────────────────────────────────────────────────────────────
+data:
+  raw_path: data/raw/WA_Fn-UseC_-Telco-Customer-Churn.csv
+  processed_path: data/processed/train.csv
+  target_column: Churn
+  test_size: 0.2
+  random_state: 42
+
+# ── Model ─────────────────────────────────────────────────────────────────────
+model:
+  name: xgboost-churn
+  type: XGBClassifier
+  hyperparameters:
+    n_estimators: 100
+    max_depth: 6
+    learning_rate: 0.1
+    subsample: 0.8
+
+# ── Pipeline ──────────────────────────────────────────────────────────────────
+pipeline:
+  name: churn-prediction-pipeline
+  model_package_group: churn-prediction-models
+  accuracy_threshold: 0.80          # fail pipeline if below this
+  instance_type_processing: ml.m5.large
+  instance_type_training: ml.m5.xlarge
+
+# ── Serving ───────────────────────────────────────────────────────────────────
+serving:
+  instance_type: ml.m5.large
+  initial_instance_count: 1
+  port: 8080
+
+# ── Monitoring ────────────────────────────────────────────────────────────────
+monitoring:
+  drift_threshold: 0.20             # alert if drift share > 20%
+  schedule: "cron(0 8 * * ? *)"    # run daily at 8 AM UTC
+  sns_topic_name: mlops-alerts
