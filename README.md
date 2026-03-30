@@ -129,7 +129,7 @@ export S3_BUCKET=your-unique-bucket-name
 aws s3 mb s3://$S3_BUCKET
 
 # Upload data to S3
-aws s3 cp data/raw/WA_Fn-UseC_-Telco-Customer-Churn.csv s3://$S3_BUCKET/raw/telco-churn.csv
+aws s3 cp data/raw/WA_Fn-UseC_-Telco-Customer-Churn.csv s3://$S3_BUCKET/raw/WA_Fn-UseC_-Telco-Customer-Churn.csv
 ```
 
 ### 8. Deploy Lambda inference (serverless serving)
