@@ -89,7 +89,19 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
+      - name: Check S3 access
+        id: s3_access
+        run: |
+          if aws s3api list-objects-v2 --bucket "$S3_BUCKET" --max-items 1 >/dev/null 2>&1; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+            echo "S3 access check passed."
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "S3 access check failed (likely 403). Running in local-only mode."
+          fi
+
       - name: Download data from S3
+        if: steps.s3_access.outputs.enabled == 'true'
         run: |
           set -euo pipefail
           mkdir -p data/raw
@@ -114,20 +126,24 @@ jobs:
           fi
 
           echo "Could not download dataset from s3://$S3_BUCKET/raw/ (missing key or access denied). Falling back to KaggleHub download."
-          if python -m pip install kagglehub; then
-            python - <<'PY'
-            import shutil
-            from pathlib import Path
-            import kagglehub
+          python -m pip install kagglehub
+          export HOME="${GITHUB_WORKSPACE}"
+          export XDG_CACHE_HOME="${GITHUB_WORKSPACE}/.cache"
+          export KAGGLEHUB_CACHE="${GITHUB_WORKSPACE}/.cache/kagglehub"
+          mkdir -p "$XDG_CACHE_HOME" "$KAGGLEHUB_CACHE"
 
-            src_dir = Path(kagglehub.dataset_download("blastchar/telco-customer-churn"))
-            src_file = src_dir / "WA_Fn-UseC_-Telco-Customer-Churn.csv"
-            dst_file = Path("data/raw/WA_Fn-UseC_-Telco-Customer-Churn.csv")
-            dst_file.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(src_file, dst_file)
-            print(f"Downloaded fallback dataset to {dst_file}")
-            PY
-          fi
+          python - <<'PY'
+          import shutil
+          from pathlib import Path
+          import kagglehub
+
+          src_dir = Path(kagglehub.dataset_download("blastchar/telco-customer-churn"))
+          src_file = src_dir / "WA_Fn-UseC_-Telco-Customer-Churn.csv"
+          dst_file = Path("data/raw/WA_Fn-UseC_-Telco-Customer-Churn.csv")
+          dst_file.parent.mkdir(parents=True, exist_ok=True)
+          shutil.copy2(src_file, dst_file)
+          print(f"Downloaded fallback dataset to {dst_file}")
+          PY
 
           if [ ! -f "$target_file" ]; then
             echo "Failed to obtain dataset from local file, S3, and Kaggle fallback." >&2
@@ -139,7 +155,12 @@ jobs:
           PYTHONPATH: ${{ github.workspace }}
           S3_BUCKET: ${{ secrets.S3_BUCKET }}
           ACCURACY_THRESHOLD: "0.80"
-        run: python pipelines/local_pipeline.py
+        run: |
+          if [ "${{ steps.s3_access.outputs.enabled }}" = "true" ]; then
+            python pipelines/local_pipeline.py
+          else
+            python pipelines/local_pipeline.py --skip-upload
+          fi
 
       - name: Post pipeline status
         if: always()
