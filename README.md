@@ -1,7 +1,9 @@
 # 🚀 Full MLOps Platform — Customer Churn Prediction
 
-A production-grade MLOps platform built on AWS, demonstrating the full ML lifecycle:
+A production-grade MLOps platform demonstrating the full ML lifecycle:
 data preprocessing → training → evaluation → deployment → monitoring.
+
+**100% AWS Free Tier** — no SageMaker, no paid instances.
 
 ## Architecture
 
@@ -11,44 +13,41 @@ GitHub Push
     ▼
 GitHub Actions CI/CD
     ├── Lint & Test (ruff + pytest)
-    ├── Build & Push Docker → ECR
-    └── Trigger SageMaker Pipeline
-            │
-            ├── Step 1: Preprocessing  (SKLearn Processor)
-            ├── Step 2: Training       (XGBoost on SageMaker)
-            ├── Step 3: Evaluation     (Quality Gate: accuracy ≥ 80%)
-            └── Step 4: Register Model (SageMaker Model Registry)
-                            │
-                            ▼
-                   SageMaker Endpoint (Real-time serving)
-                            │
-                            ▼
-                   FastAPI wrapper → API Gateway
-                            │
-                            ▼
-                   Monitoring (Evidently + CloudWatch + SNS)
-                            │
-                            ▼
-                   Lambda Drift Monitor (scheduled daily)
-                            │
-                            ▼
-                   CloudWatch Dashboard + Alarms → SNS Alerts
+    └── Train → Evaluate (quality gate) → Upload to S3
+                    │
+                    ▼
+              MLflow (local experiment tracking + model registry)
+                    │
+                    ▼
+              S3 (model artifact storage — free tier: 5GB)
+                    │
+          ┌─────────┴─────────┐
+          ▼                   ▼
+   FastAPI (local)    Lambda + API Gateway
+   Development         Production serving
+                      (free tier: 1M req/mo)
+                              │
+                              ▼
+              Lambda drift monitor (daily cron)
+                              │
+                              ▼
+              CloudWatch dashboard + alarms → SNS alerts
 ```
 
 ## Tech Stack
 
-| Layer | Tool |
-|---|---|
-| Experiment Tracking | MLflow |
-| Data Storage | AWS S3 |
-| Pipeline Orchestration | SageMaker Pipelines |
-| CI/CD | GitHub Actions |
-| Model Registry | SageMaker Model Registry |
-| Serving | SageMaker Endpoints + FastAPI |
-| Monitoring | Evidently AI + CloudWatch |
-| Alerting | AWS SNS |
-| Scheduled Tasks | AWS Lambda + CloudWatch Events |
-| Containerization | Docker + ECR |
+| Layer | Tool | Cost |
+|---|---|---|
+| Experiment Tracking | MLflow (local) | Free |
+| Data Storage | AWS S3 | Free tier (5GB) |
+| Pipeline Orchestration | Local Python + GitHub Actions | Free |
+| CI/CD | GitHub Actions | Free (public repos) |
+| Model Registry | MLflow Model Registry | Free |
+| Serving (dev) | FastAPI + Docker | Free |
+| Serving (prod) | AWS Lambda + API Gateway | Free tier (1M req/mo) |
+| Monitoring | Evidently AI + CloudWatch | Free tier (10 alarms) |
+| Alerting | AWS SNS | Free tier (1M pub/mo) |
+| Scheduled Tasks | Lambda + CloudWatch Events | Free tier |
 
 ---
 
@@ -59,6 +58,8 @@ GitHub Actions CI/CD
 ```bash
 git clone https://github.com/YOUR_USERNAME/mlops-churn-platform
 cd mlops-churn-platform
+python3 -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
@@ -66,7 +67,7 @@ pip install -r requirements.txt
 
 ```bash
 cp .env.example .env
-# Edit .env with your AWS credentials and configuration
+# Edit .env with your AWS credentials
 ```
 
 ### 3. Download dataset
@@ -75,7 +76,18 @@ Download from Kaggle: [Telco Customer Churn](https://www.kaggle.com/datasets/bla
 
 Place the CSV at: `data/raw/WA_Fn-UseC_-Telco-Customer-Churn.csv`
 
-### 4. Run locally (Phase 1)
+### 4. Run the full pipeline locally
+
+```bash
+# Runs: preprocess → train → evaluate → register model
+python pipelines/local_pipeline.py --skip-upload
+
+# With S3 upload (requires AWS credentials)
+export S3_BUCKET=your-bucket
+python pipelines/local_pipeline.py
+```
+
+### 5. Or run each step individually
 
 ```bash
 # Preprocess
@@ -87,18 +99,18 @@ python src/training/train.py
 # View MLflow UI
 mlflow ui  # open http://localhost:5000
 
-# Start inference server
+# Start local inference server
 MODEL_DIR=models uvicorn src.serving.app:app --reload
 # open http://localhost:8000/docs
 ```
 
-### 5. Run tests
+### 6. Run tests
 
 ```bash
 pip install -r requirements-dev.txt
 
 # Lint
-ruff check src/ pipelines/ monitoring/ lambda/ infra/ tests/
+ruff check src/ pipelines/ monitoring/ tests/
 
 # Unit & integration tests
 pytest tests/ -v --tb=short
@@ -107,57 +119,66 @@ pytest tests/ -v --tb=short
 pytest tests/ -v --cov=src --cov-report=term-missing
 ```
 
-### 6. Configure AWS (Phase 2)
+### 7. Configure AWS (free tier only)
 
 ```bash
-# Set environment variables (or use .env file)
 export AWS_REGION=us-east-1
 export S3_BUCKET=your-unique-bucket-name
-export SAGEMAKER_ROLE_ARN=arn:aws:iam::YOUR_ACCOUNT:role/SageMakerRole
+
+# Create S3 bucket
+aws s3 mb s3://$S3_BUCKET
 
 # Upload data to S3
 aws s3 cp data/raw/WA_Fn-UseC_-Telco-Customer-Churn.csv s3://$S3_BUCKET/raw/telco-churn.csv
-
-# Build and push Docker image
-aws ecr create-repository --repository-name mlops-churn-platform
-docker build -t mlops-churn-platform .
-docker tag mlops-churn-platform:latest YOUR_ECR_URI/mlops-churn-platform:latest
-docker push YOUR_ECR_URI/mlops-churn-platform:latest
 ```
 
-### 7. Run SageMaker Pipeline (Phase 3)
+### 8. Deploy Lambda inference (serverless serving)
 
 ```bash
-# Create + run pipeline
-python pipelines/sagemaker_pipeline.py --run
-```
-
-### 8. Deploy Lambda Drift Monitor (Phase 4)
-
-```bash
-# Package Lambda function
+# Package Lambda function with model
 cd lambda
-pip install -r requirements.txt -t package/
-cp drift_handler.py package/
-cd package && zip -r ../drift-monitor.zip . && cd ..
+pip install -r requirements-serving.txt -t package/
+cp serve_handler.py package/
+cp -r ../models/ package/models/
+cd package && zip -r ../serve.zip . && cd ..
 
 # Create Lambda function
+aws lambda create-function \
+  --function-name mlops-churn-predict \
+  --runtime python3.10 \
+  --handler serve_handler.handler \
+  --zip-file fileb://serve.zip \
+  --role $LAMBDA_ROLE_ARN \
+  --timeout 30 \
+  --memory-size 256
+
+# Add API Gateway trigger (optional, for REST endpoint)
+# See: https://docs.aws.amazon.com/lambda/latest/dg/services-apigateway.html
+```
+
+### 9. Deploy Lambda drift monitor
+
+```bash
+cd lambda
+pip install -r requirements.txt -t drift-package/
+cp drift_handler.py drift-package/
+cd drift-package && zip -r ../drift.zip . && cd ..
+
 aws lambda create-function \
   --function-name mlops-drift-monitor \
   --runtime python3.10 \
   --handler drift_handler.handler \
-  --zip-file fileb://drift-monitor.zip \
-  --role $SAGEMAKER_ROLE_ARN \
+  --zip-file fileb://drift.zip \
+  --role $LAMBDA_ROLE_ARN \
   --timeout 300 \
   --memory-size 512 \
-  --environment "Variables={S3_BUCKET=$S3_BUCKET,SNS_TOPIC_ARN=your-topic-arn,DRIFT_THRESHOLD=0.20}"
+  --environment "Variables={S3_BUCKET=$S3_BUCKET,DRIFT_THRESHOLD=0.20}"
 ```
 
-### 9. Set up CloudWatch monitoring (Phase 5)
+### 10. Set up CloudWatch monitoring
 
 ```bash
-# Create alarms, dashboard, and daily schedule
-export AWS_ACCOUNT_ID=your-account-id
+export AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
 python infra/cloudwatch_alarms.py
 ```
 
@@ -167,16 +188,15 @@ This creates:
 - **CloudWatch Events Rule**: triggers Lambda daily at 8 AM UTC
 - **CloudWatch Dashboard**: real-time model observability
 
-### 10. GitHub Secrets (for CI/CD)
+### 11. GitHub Secrets (for CI/CD)
 
-Add these in GitHub → Settings → Secrets:
+Add in GitHub → Settings → Secrets:
 
 | Secret | Value |
 |---|---|
 | `AWS_ACCESS_KEY_ID` | Your IAM key |
 | `AWS_SECRET_ACCESS_KEY` | Your IAM secret |
 | `S3_BUCKET` | Your S3 bucket name |
-| `SAGEMAKER_ROLE_ARN` | Your SageMaker role ARN |
 
 ---
 
@@ -186,40 +206,56 @@ Add these in GitHub → Settings → Secrets:
 mlops-churn-platform/
 ├── src/
 │   ├── data/
-│   │   └── preprocess.py       # Data cleaning & feature engineering
+│   │   └── preprocess.py          # Data cleaning & feature engineering
 │   ├── training/
-│   │   └── train.py            # XGBoost training + MLflow logging
+│   │   └── train.py               # XGBoost training + MLflow logging
 │   ├── evaluation/
-│   │   └── evaluate.py         # Model evaluation with quality gate
+│   │   └── evaluate.py            # Model evaluation with quality gate
 │   └── serving/
-│       └── app.py              # FastAPI inference server
+│       └── app.py                 # FastAPI inference server (local dev)
 ├── pipelines/
-│   └── sagemaker_pipeline.py   # SageMaker Pipeline definition
-├── monitoring/
-│   └── drift_monitor.py        # Evidently drift detection (local)
+│   ├── local_pipeline.py          # Full pipeline orchestrator (free)
+│   └── sagemaker_pipeline.py      # SageMaker pipeline (reference only)
 ├── lambda/
-│   ├── drift_handler.py        # AWS Lambda drift monitor (serverless)
-│   └── requirements.txt        # Lambda dependencies
+│   ├── serve_handler.py           # Lambda inference (serverless serving)
+│   ├── drift_handler.py           # Lambda drift monitor (scheduled)
+│   ├── requirements.txt           # Drift monitor deps
+│   └── requirements-serving.txt   # Serving deps
+├── monitoring/
+│   └── drift_monitor.py           # Evidently drift detection (local)
 ├── infra/
-│   └── cloudwatch_alarms.py    # CloudWatch alarms, dashboard, schedules
+│   └── cloudwatch_alarms.py       # CloudWatch alarms, dashboard, schedules
 ├── .github/
 │   └── workflows/
-│       └── mlops_pipeline.yml  # GitHub Actions CI/CD
+│       └── mlops_pipeline.yml     # GitHub Actions CI/CD
 ├── tests/
-│   ├── test_preprocess.py      # Preprocessing unit tests
-│   ├── test_train.py           # Training unit tests
-│   └── test_app.py             # FastAPI integration tests
+│   ├── test_preprocess.py         # Preprocessing unit tests
+│   ├── test_train.py              # Training unit tests
+│   └── test_app.py                # FastAPI integration tests
 ├── configs/
-│   └── config.yaml             # Centralized config
+│   └── config.yaml                # Centralized config
 ├── data/
-│   ├── raw/                    # Raw dataset (gitignored)
-│   └── processed/              # Preprocessed data (gitignored)
-├── Dockerfile
+│   ├── raw/                       # Raw dataset (gitignored)
+│   └── processed/                 # Preprocessed data (gitignored)
+├── Dockerfile                     # Container for local serving
 ├── requirements.txt
 ├── requirements-dev.txt
+├── conftest.py                    # Pytest root config
 ├── .env.example
 └── README.md
 ```
+
+---
+
+## AWS Free Tier Usage
+
+| Service | Free Tier Limit | Our Usage |
+|---|---|---|
+| S3 | 5GB, 20k GET/mo | Model artifacts + data (~50MB) |
+| Lambda | 1M requests, 400k GB-sec/mo | Inference + drift monitoring |
+| CloudWatch | 10 metrics, 10 alarms | 3 alarms, 1 dashboard |
+| SNS | 1M publishes/mo | Alert notifications |
+| API Gateway | 1M calls/mo (12 months) | REST endpoint for Lambda |
 
 ---
 
@@ -228,25 +264,11 @@ mlops-churn-platform/
 - ✅ **Experiment tracking** with MLflow
 - ✅ **Automated retraining** on code push via GitHub Actions
 - ✅ **Quality gates** — pipeline fails if accuracy drops below threshold
-- ✅ **Model registry** — versioned models with approval workflow
-- ✅ **Containerized serving** — Docker + FastAPI
+- ✅ **Model registry** — versioned models with MLflow
+- ✅ **Local serving** — Docker + FastAPI
+- ✅ **Serverless serving** — Lambda + API Gateway (free tier)
 - ✅ **Data drift detection** — Evidently AI + Lambda scheduled monitoring
 - ✅ **CloudWatch observability** — dashboards, alarms, custom metrics
 - ✅ **Alerting pipeline** — SNS notifications for drift/accuracy/latency
-- ✅ **Infrastructure as Code** — SageMaker Pipelines + CloudWatch setup in Python
-- ✅ **CI/CD** — lint, test, build, deploy on every push
-
----
-
-## Environment Variables
-
-See [`.env.example`](.env.example) for the full list. Key variables:
-
-| Variable | Description |
-|---|---|
-| `AWS_REGION` | AWS region (default: us-east-1) |
-| `S3_BUCKET` | S3 bucket for data and artifacts |
-| `SAGEMAKER_ROLE_ARN` | IAM role for SageMaker |
-| `SNS_TOPIC_ARN` | SNS topic for alerts |
-| `MODEL_DIR` | Local model directory (default: models) |
-| `MLFLOW_TRACKING_URI` | MLflow URI (default: ./mlruns) |
+- ✅ **CI/CD** — lint, test, train, deploy on every push
+- ✅ **100% free tier** — no paid AWS services

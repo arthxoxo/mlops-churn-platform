@@ -2,14 +2,12 @@
 project:
   name: mlops-churn-platform
   version: "1.0.0"
-  description: "Full MLOps platform for customer churn prediction"
+  description: "Full MLOps platform for customer churn prediction (AWS free tier)"
 
-# ── AWS ───────────────────────────────────────────────────────────────────────
+# ── AWS (free-tier only) ─────────────────────────────────────────────────────
 aws:
   region: us-east-1
-  s3_bucket: your-mlops-bucket        # <-- change this
-  sagemaker_role_arn: arn:aws:iam::YOUR_ACCOUNT_ID:role/SageMakerRole  # <-- change this
-  ecr_repository: mlops-churn-platform
+  s3_bucket: your-mlops-bucket        # <-- change this (free tier: 5GB)
 
 # ── Data ──────────────────────────────────────────────────────────────────────
 data:
@@ -32,19 +30,29 @@ model:
 # ── Pipeline ──────────────────────────────────────────────────────────────────
 pipeline:
   name: churn-prediction-pipeline
-  model_package_group: churn-prediction-models
   accuracy_threshold: 0.80          # fail pipeline if below this
-  instance_type_processing: ml.m5.large
-  instance_type_training: ml.m5.xlarge
+  execution: local                  # runs locally or in GitHub Actions
 
 # ── Serving ───────────────────────────────────────────────────────────────────
 serving:
-  instance_type: ml.m5.large
-  initial_instance_count: 1
-  port: 8080
+  # Option 1: Local FastAPI server
+  local_port: 8080
+  # Option 2: AWS Lambda (free tier: 1M requests/month)
+  lambda_function_name: mlops-churn-predict
+  lambda_memory_mb: 256
+  lambda_timeout_seconds: 30
 
 # ── Monitoring ────────────────────────────────────────────────────────────────
 monitoring:
   drift_threshold: 0.20             # alert if drift share > 20%
   schedule: "cron(0 8 * * ? *)"    # run daily at 8 AM UTC
   sns_topic_name: mlops-alerts
+  # CloudWatch free tier: 10 custom metrics, 10 alarms
+  cloudwatch_namespace: MLOps/ChurnModel
+
+# ── AWS Free Tier Limits (reference) ─────────────────────────────────────────
+# S3:         5GB storage, 20k GET, 2k PUT requests/month
+# Lambda:     1M requests, 400k GB-seconds/month
+# CloudWatch: 10 custom metrics, 10 alarms, 3 dashboards
+# SNS:        1M publishes/month
+# API Gateway: 1M API calls/month (first 12 months)
