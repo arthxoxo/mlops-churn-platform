@@ -7,6 +7,7 @@ on:
     branches: [main]
   workflow_dispatch:  # allow manual trigger
 
+  
 env:
   AWS_REGION: us-east-1
   S3_BUCKET: ${{ secrets.S3_BUCKET }}
