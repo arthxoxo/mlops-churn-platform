@@ -100,21 +100,20 @@ jobs:
             exit 0
           fi
 
-          found_key=""
+          downloaded_from_s3="false"
           for key in "raw/WA_Fn-UseC_-Telco-Customer-Churn.csv" "raw/telco-churn.csv"; do
-            if aws s3api head-object --bucket "$S3_BUCKET" --key "$key" >/dev/null 2>&1; then
-              found_key="$key"
+            if aws s3 cp "s3://$S3_BUCKET/$key" "$target_file" >/dev/null 2>&1; then
+              echo "Downloaded dataset from s3://$S3_BUCKET/$key"
+              downloaded_from_s3="true"
               break
             fi
           done
 
-          if [ -n "$found_key" ]; then
-            aws s3 cp "s3://$S3_BUCKET/$found_key" "$target_file"
-            echo "Downloaded dataset from s3://$S3_BUCKET/$found_key"
+          if [ "$downloaded_from_s3" = "true" ]; then
             exit 0
           fi
 
-          echo "Dataset not found in s3://$S3_BUCKET/raw/. Falling back to KaggleHub download."
+          echo "Could not download dataset from s3://$S3_BUCKET/raw/ (missing key or access denied). Falling back to KaggleHub download."
           if python -m pip install kagglehub; then
             python - <<'PY'
             import shutil
