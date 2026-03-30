@@ -93,10 +93,17 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p data/raw
-          if aws s3 ls "s3://$S3_BUCKET/raw/telco-churn.csv" >/dev/null 2>&1; then
-            aws s3 cp "s3://$S3_BUCKET/raw/telco-churn.csv" data/raw/WA_Fn-UseC_-Telco-Customer-Churn.csv
-          elif aws s3 ls "s3://$S3_BUCKET/raw/WA_Fn-UseC_-Telco-Customer-Churn.csv" >/dev/null 2>&1; then
-            aws s3 cp "s3://$S3_BUCKET/raw/WA_Fn-UseC_-Telco-Customer-Churn.csv" data/raw/WA_Fn-UseC_-Telco-Customer-Churn.csv
+          found_key=""
+          for key in "raw/WA_Fn-UseC_-Telco-Customer-Churn.csv" "raw/telco-churn.csv"; do
+            if aws s3api head-object --bucket "$S3_BUCKET" --key "$key" >/dev/null 2>&1; then
+              found_key="$key"
+              break
+            fi
+          done
+
+          if [ -n "$found_key" ]; then
+            aws s3 cp "s3://$S3_BUCKET/$found_key" data/raw/WA_Fn-UseC_-Telco-Customer-Churn.csv
+            echo "Downloaded dataset from s3://$S3_BUCKET/$found_key"
           else
             echo "Dataset not found in s3://$S3_BUCKET/raw/. Falling back to KaggleHub download."
             python -m pip install kagglehub

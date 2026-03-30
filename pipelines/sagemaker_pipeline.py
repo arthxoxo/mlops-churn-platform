@@ -63,7 +63,7 @@ def build_pipeline(sagemaker_session):
         processor=sklearn_processor,
         inputs=[
             ProcessingInput(
-                source=f"s3://{BUCKET}/raw/telco-churn.csv",
+                source=f"s3://{BUCKET}/raw/WA_Fn-UseC_-Telco-Customer-Churn.csv",
                 destination="/opt/ml/processing/input",
             )
         ],
