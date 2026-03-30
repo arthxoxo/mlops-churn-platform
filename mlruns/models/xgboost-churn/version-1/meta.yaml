@@ -1,0 +1,16 @@
+creation_timestamp: 1774868504582
+current_stage: None
+deployment_job_state: null
+description: null
+last_updated_timestamp: 1774868504582
+model_id: m-c7250ce4e0f54f68b1456638525429e5
+name: xgboost-churn
+run_id: 73ecf3023e464afe97fa384e526f27e1
+run_link: null
+source: models:/m-c7250ce4e0f54f68b1456638525429e5
+status: READY
+status_message: null
+storage_location: /Users/arthxoxo/MLOps/mlops-churn-platform-1/mlruns/714939654945742778/models/m-c7250ce4e0f54f68b1456638525429e5/artifacts
+user_id: null
+version: 1
+workspace: default

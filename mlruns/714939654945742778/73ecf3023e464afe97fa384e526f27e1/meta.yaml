@@ -1,0 +1,14 @@
+artifact_uri: /Users/arthxoxo/MLOps/mlops-churn-platform-1/mlruns/714939654945742778/73ecf3023e464afe97fa384e526f27e1/artifacts
+end_time: 1774868502721
+entry_point_name: ''
+experiment_id: '714939654945742778'
+lifecycle_stage: active
+run_id: 73ecf3023e464afe97fa384e526f27e1
+run_name: funny-dog-1
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1774868500496
+status: 3
+tags: []
+user_id: arthxoxo

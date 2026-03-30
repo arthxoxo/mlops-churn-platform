@@ -1,0 +1,20 @@
+{
+  "metrics": {
+    "accuracy": {
+      "value": 0.8119
+    },
+    "roc_auc": {
+      "value": 0.8686
+    },
+    "f1_score": {
+      "value": 0.5837
+    },
+    "precision": {
+      "value": 0.707
+    },
+    "recall": {
+      "value": 0.4971
+    }
+  },
+  "dataset_size": 5
+}
