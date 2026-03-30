@@ -69,12 +69,18 @@ def evaluate(model, scaler, X, y) -> dict:
     y_pred = model.predict(X_scaled)
     y_proba = model.predict_proba(X_scaled)[:, 1]
 
+    acc: float = float(accuracy_score(y, y_pred))
+    auc: float = float(roc_auc_score(y, y_proba))
+    f1: float = float(f1_score(y, y_pred))
+    prec: float = float(precision_score(y, y_pred))
+    rec: float = float(recall_score(y, y_pred))
+
     metrics = {
-        "accuracy": {"value": round(float(accuracy_score(y, y_pred)), 4)},
-        "roc_auc": {"value": round(float(roc_auc_score(y, y_proba)), 4)},
-        "f1_score": {"value": round(float(f1_score(y, y_pred)), 4)},
-        "precision": {"value": round(float(precision_score(y, y_pred)), 4)},
-        "recall": {"value": round(float(recall_score(y, y_pred)), 4)},
+        "accuracy": {"value": round(acc, 4)},
+        "roc_auc": {"value": round(auc, 4)},
+        "f1_score": {"value": round(f1, 4)},
+        "precision": {"value": round(prec, 4)},
+        "recall": {"value": round(rec, 4)},
     }
 
     logger.info(f"Evaluation metrics: {json.dumps(metrics, indent=2)}")
