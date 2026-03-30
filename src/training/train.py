@@ -10,10 +10,11 @@ import logging
 import pandas as pd
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
+from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score, roc_auc_score, f1_score, classification_report
-import xgboost as xgb
 import mlflow
 import mlflow.xgboost
+import mlflow.sklearn
 import joblib
 
 logging.basicConfig(level=logging.INFO)
@@ -47,17 +48,31 @@ def load_data(data_path: str):
 
 
 def train_model(X_train, y_train, params: dict):
-    """Train XGBoost model."""
-    model = xgb.XGBClassifier(
-        n_estimators=params["n_estimators"],
-        max_depth=params["max_depth"],
-        learning_rate=params["learning_rate"],
-        subsample=params["subsample"],
-        use_label_encoder=False,
-        eval_metric="logloss",
-        random_state=42,
-    )
-    model.fit(X_train, y_train, eval_set=[(X_train, y_train)], verbose=False)
+    """Train model using XGBoost when available, otherwise sklearn fallback."""
+    try:
+        import xgboost as xgb
+
+        model = xgb.XGBClassifier(
+            n_estimators=params["n_estimators"],
+            max_depth=params["max_depth"],
+            learning_rate=params["learning_rate"],
+            subsample=params["subsample"],
+            use_label_encoder=False,
+            eval_metric="logloss",
+            random_state=42,
+        )
+        model.fit(X_train, y_train, eval_set=[(X_train, y_train)], verbose=False)
+        model._model_backend = "xgboost"
+        return model
+    except Exception as exc:
+        logger.warning("XGBoost unavailable (%s). Falling back to RandomForestClassifier.", exc)
+        model = RandomForestClassifier(
+            n_estimators=params["n_estimators"],
+            max_depth=params["max_depth"],
+            random_state=42,
+        )
+        model.fit(X_train, y_train)
+        model._model_backend = "sklearn"
     return model
 
 
@@ -121,8 +136,11 @@ def main():
         metrics = evaluate_model(model, X_test_scaled, y_test)
         mlflow.log_metrics(metrics)
 
-        # Log model to MLflow
-        mlflow.xgboost.log_model(model, "model")
+        # Log model to MLflow using the matching flavor.
+        if getattr(model, "_model_backend", "xgboost") == "xgboost":
+            mlflow.xgboost.log_model(model, "model")
+        else:
+            mlflow.sklearn.log_model(model, "model")
 
         # Save artifacts locally
         save_model(model, scaler, feature_names, args.output_dir, metrics)

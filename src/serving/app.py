@@ -25,6 +25,12 @@ model_artifacts = {}
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Load model on startup."""
+    if all(key in model_artifacts for key in ("model", "scaler", "feature_names", "metrics")):
+        logger.info("Using preloaded model artifacts.")
+        yield
+        model_artifacts.clear()
+        return
+
     model_dir = os.environ.get("MODEL_DIR", "models")
     try:
         model_artifacts["model"] = joblib.load(os.path.join(model_dir, "model.joblib"))
