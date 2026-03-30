@@ -93,6 +93,13 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p data/raw
+          target_file="data/raw/WA_Fn-UseC_-Telco-Customer-Churn.csv"
+
+          if [ -f "$target_file" ]; then
+            echo "Using dataset already present in repository: $target_file"
+            exit 0
+          fi
+
           found_key=""
           for key in "raw/WA_Fn-UseC_-Telco-Customer-Churn.csv" "raw/telco-churn.csv"; do
             if aws s3api head-object --bucket "$S3_BUCKET" --key "$key" >/dev/null 2>&1; then
@@ -102,11 +109,13 @@ jobs:
           done
 
           if [ -n "$found_key" ]; then
-            aws s3 cp "s3://$S3_BUCKET/$found_key" data/raw/WA_Fn-UseC_-Telco-Customer-Churn.csv
+            aws s3 cp "s3://$S3_BUCKET/$found_key" "$target_file"
             echo "Downloaded dataset from s3://$S3_BUCKET/$found_key"
-          else
-            echo "Dataset not found in s3://$S3_BUCKET/raw/. Falling back to KaggleHub download."
-            python -m pip install kagglehub
+            exit 0
+          fi
+
+          echo "Dataset not found in s3://$S3_BUCKET/raw/. Falling back to KaggleHub download."
+          if python -m pip install kagglehub; then
             python - <<'PY'
             import shutil
             from pathlib import Path
@@ -119,6 +128,11 @@ jobs:
             shutil.copy2(src_file, dst_file)
             print(f"Downloaded fallback dataset to {dst_file}")
             PY
+          fi
+
+          if [ ! -f "$target_file" ]; then
+            echo "Failed to obtain dataset from local file, S3, and Kaggle fallback." >&2
+            exit 1
           fi
 
       - name: Run full pipeline (preprocess → train → evaluate → upload)
