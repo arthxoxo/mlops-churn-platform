@@ -1,0 +1,10 @@
+artifact_location: /Users/arthxoxo/MLOps/mlops-churn-platform-1/mlruns/173824987663585032/models/m-7803b0384ec44a549ae31e1c23a8f099/artifacts
+creation_timestamp: 1774867150355
+experiment_id: '173824987663585032'
+last_updated_timestamp: 1774867151992
+model_id: m-7803b0384ec44a549ae31e1c23a8f099
+model_type: null
+name: model
+source_run_id: 6f5b1f87129c427eb53b3d73ed516fde
+status: 2
+status_message: null

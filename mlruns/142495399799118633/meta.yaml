@@ -1,0 +1,7 @@
+artifact_location: /Users/arthxoxo/MLOps/mlops-churn-platform-1/mlruns/142495399799118633
+creation_time: 1774867336734
+experiment_id: '142495399799118633'
+last_update_time: 1774867336734
+lifecycle_stage: active
+name: churn-prediction-local-run
+workspace: default
