@@ -3,6 +3,6 @@ creation_timestamp: 1774868504577
 deployment_job_id: null
 deployment_job_state: null
 description: null
-last_updated_timestamp: 1774950672475
+last_updated_timestamp: 1774954202336
 name: xgboost-churn
 workspace: default

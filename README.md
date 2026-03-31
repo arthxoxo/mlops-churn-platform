@@ -156,6 +156,42 @@ aws lambda create-function \
 # See: https://docs.aws.amazon.com/lambda/latest/dg/services-apigateway.html
 ```
 
+### 8b. Deploy FastAPI directly on Lambda (recommended)
+
+This deploys the same app from src/serving/app.py to Lambda using Mangum.
+
+```bash
+export AWS_REGION=us-east-1
+export LAMBDA_ROLE_ARN=arn:aws:iam::<account-id>:role/<lambda-exec-role>
+export FUNCTION_NAME=mlops-churn-fastapi
+
+bash lambda/deploy_fastapi_lambda.sh
+```
+
+Then expose it with one of these options:
+
+1. API Gateway HTTP API integration to Lambda
+2. Lambda Function URL
+
+Quick Function URL setup:
+
+```bash
+aws lambda create-function-url-config \
+  --function-name "$FUNCTION_NAME" \
+  --auth-type NONE \
+  --region "$AWS_REGION"
+
+aws lambda add-permission \
+  --function-name "$FUNCTION_NAME" \
+  --statement-id FunctionURLAllowPublicAccess \
+  --action lambda:InvokeFunctionUrl \
+  --principal '*' \
+  --function-url-auth-type NONE \
+  --region "$AWS_REGION"
+```
+
+After that, open /docs on the Function URL to access Swagger.
+
 ### 9. Deploy Lambda drift monitor
 
 ```bash
