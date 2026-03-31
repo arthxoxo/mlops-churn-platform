@@ -49,6 +49,7 @@ jobs:
       HOME: ${{ github.workspace }}
       XDG_CACHE_HOME: ${{ github.workspace }}/.cache
       KAGGLEHUB_CACHE: ${{ github.workspace }}/.cache/kagglehub
+      SKLEARN_CONFIG_HOME: ${{ github.workspace }}/.cache/sklearn
       TMPDIR: ${{ github.workspace }}/.tmp
       # AWS secrets exposed as env vars for use in conditionals
       AWS_ROLE_TO_ASSUME: ${{ secrets.AWS_ROLE_TO_ASSUME }}
@@ -74,8 +75,19 @@ jobs:
       - name: Prepare runtime directories
         run: mkdir -p "$HOME" "$XDG_CACHE_HOME" "$KAGGLEHUB_CACHE" "$TMPDIR"
 
-      - name: Clean MLflow artifacts (avoid /Users paths from macOS)
-        run: rm -rf mlruns artifacts .mlflow
+      - name: Clean environment-specific artifacts (avoid /Users paths from macOS)
+        run: |
+          # Remove MLflow and model artifacts that might have /Users paths
+          rm -rf mlruns/ artifacts/ .mlflow/ .sklearn_config/ 2>/dev/null || true
+          
+          # Remove cached model files 
+          rm -rf models/*.joblib models/*.pkl 2>/dev/null || true
+          
+          # Remove Python cache and environment cache
+          find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
+          rm -rf .cache/ .kagglehub/ .tmp/ 2>/dev/null || true
+          
+          echo "✅ Cleaned environment-specific files"
 
       - name: Validate AWS configuration
         run: |

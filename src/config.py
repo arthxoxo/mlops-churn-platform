@@ -107,12 +107,17 @@ def ensure_safe_environment() -> None:
     """
     workspace = get_workspace_root()
     
-    # Ensure HOME is set to workspace for kagglehub and other tools
-    os.environ.setdefault("HOME", str(workspace))
+    # Force HOME to workspace (override any system HOME that may contain /Users)
+    # This is critical for tools like kagglehub, sklearn cache, etc.
+    os.environ["HOME"] = str(workspace)
     
-    # Ensure cache directories are in workspace
-    os.environ.setdefault("XDG_CACHE_HOME", str(workspace / ".cache"))
-    os.environ.setdefault("KAGGLEHUB_CACHE", str(workspace / ".cache" / "kagglehub"))
+    # Force cache directories in workspace
+    os.environ["XDG_CACHE_HOME"] = str(workspace / ".cache")
+    os.environ["KAGGLEHUB_CACHE"] = str(workspace / ".cache" / "kagglehub")
+    os.environ["TMPDIR"] = str(workspace / ".tmp")
+    
+    # Ensure sklearn cache is also in workspace
+    os.environ["SKLEARN_CONFIG_HOME"] = str(workspace / ".cache" / "sklearn")
     
     # Ensure MLflow doesn't create paths outside workspace
     if "MLFLOW_TRACKING_URI" not in os.environ:
