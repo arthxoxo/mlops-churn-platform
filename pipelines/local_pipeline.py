@@ -37,13 +37,22 @@ DATA_PROCESSED = str(PathConfig.data_processed())
 ACCURACY_THRESHOLD = float(os.environ.get("ACCURACY_THRESHOLD", "0.80"))
 
 
-def run_step(name: str, command: list[str]) -> int:
-    """Run a pipeline step as a subprocess."""
+def run_step(name: str, command: list[str], env: dict | None = None) -> int:
+    """Run a pipeline step as a subprocess, inheriting environment variables."""
     logger.info(f"{'─' * 60}")
     logger.info(f"Step: {name}")
     logger.info(f"Command: {' '.join(command)}")
     logger.info(f"{'─' * 60}")
-    result = subprocess.run(command, cwd=str(PROJECT_ROOT))
+    
+    # Use current environment with any overrides
+    if env is None:
+        env = os.environ.copy()
+    else:
+        _env = os.environ.copy()
+        _env.update(env)
+        env = _env
+    
+    result = subprocess.run(command, cwd=str(PROJECT_ROOT), env=env)
     if result.returncode != 0:
         logger.error(f"Step '{name}' failed with exit code {result.returncode}")
         sys.exit(1)
@@ -71,24 +80,17 @@ def step_evaluate() -> dict:
     # Set up paths for the evaluation script
     eval_output = str(PathConfig.evaluation_output())
 
-    env = os.environ.copy()
-    env["SM_CHANNEL_MODEL"] = MODEL_DIR
-    env["SM_CHANNEL_TEST"] = DATA_PROCESSED
-    env["SM_OUTPUT_DIR"] = eval_output
+    env = {
+        "SM_CHANNEL_MODEL": MODEL_DIR,
+        "SM_CHANNEL_TEST": DATA_PROCESSED,
+        "SM_OUTPUT_DIR": eval_output,
+    }
 
-    logger.info(f"{'─' * 60}")
-    logger.info("Step: Evaluation (Quality Gate)")
-    logger.info(f"{'─' * 60}")
-
-    result = subprocess.run(
+    run_step(
+        "Evaluation (Quality Gate)",
         [sys.executable, "src/evaluation/evaluate.py"],
-        cwd=str(PROJECT_ROOT),
         env=env,
     )
-
-    if result.returncode != 0:
-        logger.error("Evaluation step failed.")
-        sys.exit(1)
 
     # Read evaluation results
     eval_path = os.path.join(eval_output, "evaluation.json")
