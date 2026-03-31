@@ -198,13 +198,51 @@ jobs:
             python pipelines/local_pipeline.py --skip-upload
           fi
 
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+        if: success()
+        with:
+          registry-type: private
+
+      - name: Build, tag, and push Docker image
+        if: success()
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: churn-prediction-api
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          # Build image
+          docker build -t "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" \
+                       -t "$ECR_REGISTRY/$ECR_REPOSITORY:latest" .
+          
+          # Push both tags
+          docker push "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+          docker push "$ECR_REGISTRY/$ECR_REPOSITORY:latest"
+          
+          echo "✅ Docker image pushed to ECR:"
+          echo "  - $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+          echo "  - $ECR_REGISTRY/$ECR_REPOSITORY:latest"
+
       - name: Post pipeline status
         if: always()
         uses: actions/github-script@v7
         with:
           script: |
             const status = '${{ job.status }}' === 'success' ? '✅' : '❌';
-            const msg = `${status} ML Pipeline ${('${{ job.status }}').toUpperCase()} for commit ${{ github.sha }}`;
+            let msg = `${status} ML Pipeline ${('${{ job.status }}').toUpperCase()} for commit ${{ github.sha }}`;
+            
+            // Add Docker image info if build succeeded
+            if ('${{ job.status }}' === 'success') {
+              msg += `\n\n🐳 **Docker Image:**\n`;
+              msg += `\`\`\`\n`;
+              msg += `ECR Repository: churn-prediction-api\n`;
+              msg += `Tags:\n`;
+              msg += `  - ${{ github.sha }}\n`;
+              msg += `  - latest\n`;
+              msg += `\`\`\`\n`;
+            }
+            
             // Only comment on PRs
             if (context.issue?.number) {
               github.rest.issues.createComment({
