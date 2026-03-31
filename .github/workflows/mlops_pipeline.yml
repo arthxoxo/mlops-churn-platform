@@ -132,9 +132,11 @@ jobs:
           HOME: ${{ github.workspace }}
           XDG_CACHE_HOME: ${{ github.workspace }}/.cache
           KAGGLEHUB_CACHE: ${{ github.workspace }}/.cache/kagglehub
+          SKLEARN_CONFIG_HOME: ${{ github.workspace }}/.cache/sklearn
+          TMPDIR: ${{ github.workspace }}/.tmp
         run: |
           set -euo pipefail
-          mkdir -p data/raw
+          mkdir -p data/raw "$XDG_CACHE_HOME" "$KAGGLEHUB_CACHE" "${SKLEARN_CONFIG_HOME%/*}" "$TMPDIR"
           target_file="data/raw/WA_Fn-UseC_-Telco-Customer-Churn.csv"
 
           if [ -f "$target_file" ]; then
@@ -185,9 +187,11 @@ jobs:
           HOME: ${{ github.workspace }}
           XDG_CACHE_HOME: ${{ github.workspace }}/.cache
           KAGGLEHUB_CACHE: ${{ github.workspace }}/.cache/kagglehub
+          SKLEARN_CONFIG_HOME: ${{ github.workspace }}/.cache/sklearn
+          TMPDIR: ${{ github.workspace }}/.tmp
           MLFLOW_TRACKING_URI: ${{ github.workspace }}/mlruns
         run: |
-          mkdir -p "${XDG_CACHE_HOME}" "${KAGGLEHUB_CACHE}"
+          mkdir -p "${XDG_CACHE_HOME}" "${KAGGLEHUB_CACHE}" "${SKLEARN_CONFIG_HOME%/*}" "${TMPDIR}"
           if [ "${{ steps.s3_access.outputs.enabled }}" = "true" ]; then
             python pipelines/local_pipeline.py
           else
