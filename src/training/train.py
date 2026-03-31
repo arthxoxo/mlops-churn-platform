@@ -7,6 +7,8 @@ import os
 import json
 import argparse
 import logging
+import sys
+from pathlib import Path
 import pandas as pd
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
@@ -16,6 +18,10 @@ import mlflow
 import mlflow.xgboost
 import mlflow.sklearn
 import joblib
+
+# Add src to path for imports
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+from src.config import PathConfig, ensure_safe_environment
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -29,10 +35,10 @@ def parse_args():
     parser.add_argument("--learning-rate", type=float, default=0.1)
     parser.add_argument("--subsample", type=float, default=0.8)
     # Data paths (SageMaker injects these automatically)
-    parser.add_argument("--train", type=str, default=os.environ.get("SM_CHANNEL_TRAIN", "data/processed"))
-    parser.add_argument("--output-dir", type=str, default=os.environ.get("SM_MODEL_DIR", "models"))
+    parser.add_argument("--train", type=str, default=os.environ.get("SM_CHANNEL_TRAIN", str(PathConfig.data_processed())))
+    parser.add_argument("--output-dir", type=str, default=os.environ.get("SM_MODEL_DIR", str(PathConfig.models())))
     # MLflow
-    parser.add_argument("--mlflow-tracking-uri", type=str, default="./mlruns")
+    parser.add_argument("--mlflow-tracking-uri", type=str, default=PathConfig.mlflow_tracking())
     parser.add_argument("--experiment-name", type=str, default="churn-prediction")
     return parser.parse_args()
 
@@ -92,17 +98,21 @@ def evaluate_model(model, X_test, y_test):
 
 def save_model(model, scaler, feature_names, output_dir: str, metrics: dict):
     """Save model artifacts."""
-    os.makedirs(output_dir, exist_ok=True)
-    joblib.dump(model, os.path.join(output_dir, "model.joblib"))
-    joblib.dump(scaler, os.path.join(output_dir, "scaler.joblib"))
-    with open(os.path.join(output_dir, "feature_names.json"), "w") as f:
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    joblib.dump(model, output_dir / "model.joblib")
+    joblib.dump(scaler, output_dir / "scaler.joblib")
+    with open(output_dir / "feature_names.json", "w") as f:
         json.dump(feature_names, f)
-    with open(os.path.join(output_dir, "metrics.json"), "w") as f:
+    with open(output_dir / "metrics.json", "w") as f:
         json.dump(metrics, f)
     logger.info(f"Model saved to {output_dir}")
 
 
 def main():
+    # Ensure safe environment before running
+    ensure_safe_environment()
+    
     args = parse_args()
 
     # MLflow setup

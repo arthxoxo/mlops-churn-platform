@@ -18,15 +18,22 @@ import subprocess
 from datetime import datetime
 from pathlib import Path
 
+# Add src to path for imports
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from src.config import PathConfig, ensure_safe_environment
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
 
 # ── Configuration ────────────────────────────────────────────────────────────
-PROJECT_ROOT = Path(__file__).parent.parent
+# Ensure safe environment FIRST thing
+ensure_safe_environment()
+
+PROJECT_ROOT = PathConfig.workspace_root()
 S3_BUCKET = os.environ.get("S3_BUCKET", "")
-MODEL_DIR = os.environ.get("MODEL_DIR", str(PROJECT_ROOT / "models"))
-DATA_RAW = str(PROJECT_ROOT / "data" / "raw" / "WA_Fn-UseC_-Telco-Customer-Churn.csv")
-DATA_PROCESSED = str(PROJECT_ROOT / "data" / "processed")
+MODEL_DIR = str(PathConfig.models())
+DATA_RAW = str(PathConfig.data_raw() / "WA_Fn-UseC_-Telco-Customer-Churn.csv")
+DATA_PROCESSED = str(PathConfig.data_processed())
 ACCURACY_THRESHOLD = float(os.environ.get("ACCURACY_THRESHOLD", "0.80"))
 
 
@@ -54,7 +61,7 @@ def step_train():
     run_step("Training", [
         sys.executable, "src/training/train.py",
         "--output-dir", MODEL_DIR,
-        "--mlflow-tracking-uri", "./mlruns",
+        "--mlflow-tracking-uri", PathConfig.mlflow_tracking(),
         "--experiment-name", "churn-prediction",
     ])
 
@@ -62,8 +69,7 @@ def step_train():
 def step_evaluate() -> dict:
     """Step 3: Model evaluation (quality gate)."""
     # Set up paths for the evaluation script
-    eval_output = str(PROJECT_ROOT / "evaluation_output")
-    os.makedirs(eval_output, exist_ok=True)
+    eval_output = str(PathConfig.evaluation_output())
 
     env = os.environ.copy()
     env["SM_CHANNEL_MODEL"] = MODEL_DIR
@@ -153,7 +159,7 @@ def step_register_model(evaluation: dict):
     try:
         import mlflow
 
-        mlflow.set_tracking_uri("./mlruns")
+        mlflow.set_tracking_uri(PathConfig.mlflow_tracking())
 
         # Find the latest run
         client = mlflow.tracking.MlflowClient()
