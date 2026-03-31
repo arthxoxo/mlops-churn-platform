@@ -5,14 +5,20 @@ Sends alert to SNS if drift is detected.
 """
 
 import os
+import sys
 import json
 import boto3
 import pandas as pd
 import logging
+from pathlib import Path
 from datetime import datetime
 from evidently.report import Report
 from evidently.metric_preset import DataDriftPreset
 from evidently.metrics import DatasetDriftMetric
+
+# Add src to path for imports
+sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+from config import PathConfig
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -24,7 +30,7 @@ DRIFT_THRESHOLD = 0.2  # Alert if drift score > 20%
 
 def load_reference_data() -> pd.DataFrame:
     """Load training data as reference."""
-    return pd.read_csv("data/processed/train.csv")
+    return pd.read_csv(PathConfig.data_processed() / "train.csv")
 
 
 def load_production_data() -> pd.DataFrame:

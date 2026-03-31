@@ -45,7 +45,11 @@ jobs:
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
     env:
-      AWS_ROLE_TO_ASSUME: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+      # Force Linux-safe paths (cross-platform CI safety)
+      HOME: ${{ github.workspace }}
+      XDG_CACHE_HOME: ${{ github.workspace }}/.cache
+      KAGGLEHUB_CACHE: ${{ github.workspace }}/.cache/kagglehub
+      TMPDIR: ${{ github.workspace }}/.tmp
     permissions:
       id-token: write
       contents: read
@@ -63,6 +67,9 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Prepare runtime directories
+        run: mkdir -p "$HOME" "$XDG_CACHE_HOME" "$KAGGLEHUB_CACHE" "$TMPDIR"
+
       - name: Validate AWS configuration
         run: |
           test -n "${{ secrets.S3_BUCKET }}" || (echo "Missing S3_BUCKET secret" && exit 1)
@@ -75,14 +82,14 @@ jobs:
           fi
 
       - name: Configure AWS credentials (OIDC)
-        if: env.AWS_ROLE_TO_ASSUME != ''
+        if: ${{ secrets.AWS_ROLE_TO_ASSUME != ''}}
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ env.AWS_ROLE_TO_ASSUME }}
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Configure AWS credentials (static keys)
-        if: env.AWS_ROLE_TO_ASSUME == ''
+        if: ${{ secrets.AWS_ROLE_TO_ASSUME == '' }}
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}

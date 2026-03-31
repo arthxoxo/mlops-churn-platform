@@ -8,9 +8,11 @@ Works both locally and on SageMaker Processing jobs.
 """
 
 import os
+import sys
 import json
 import tarfile
 import logging
+from pathlib import Path
 import pandas as pd
 from sklearn.metrics import (
     accuracy_score,
@@ -22,13 +24,17 @@ from sklearn.metrics import (
 )
 import joblib
 
+# Add src to path for imports
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+from src.config import PathConfig
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# SageMaker Processing paths (defaults for local testing)
-MODEL_PATH = os.environ.get("SM_CHANNEL_MODEL", "/opt/ml/processing/model")
-TEST_PATH = os.environ.get("SM_CHANNEL_TEST", "/opt/ml/processing/test")
-OUTPUT_PATH = os.environ.get("SM_OUTPUT_DIR", "/opt/ml/processing/evaluation")
+# SageMaker Processing paths (defaults to repo-relative paths for local testing)
+MODEL_PATH = os.environ.get("SM_CHANNEL_MODEL", str(PathConfig.models()))
+TEST_PATH = os.environ.get("SM_CHANNEL_TEST", str(PathConfig.data_processed()))
+OUTPUT_PATH = os.environ.get("SM_OUTPUT_DIR", str(PathConfig.evaluation_output()))
 
 
 def extract_model(model_dir: str):

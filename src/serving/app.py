@@ -5,8 +5,10 @@ Or deploy as Docker container.
 """
 
 import os
+import sys
 import json
 import logging
+from pathlib import Path
 from typing import List
 from contextlib import asynccontextmanager
 
@@ -14,6 +16,10 @@ import joblib
 import numpy as np
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
+
+# Add src to path for imports
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from config import PathConfig
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -31,7 +37,7 @@ async def lifespan(app: FastAPI):
         model_artifacts.clear()
         return
 
-    model_dir = os.environ.get("MODEL_DIR", "models")
+    model_dir = os.environ.get("MODEL_DIR", str(PathConfig.models()))
     try:
         model_artifacts["model"] = joblib.load(os.path.join(model_dir, "model.joblib"))
         model_artifacts["scaler"] = joblib.load(os.path.join(model_dir, "scaler.joblib"))

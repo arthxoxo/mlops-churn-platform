@@ -4,6 +4,9 @@ Replaces SageMaker Endpoints with Lambda + API Gateway.
 
 Free tier: 1M requests/month + 400,000 GB-seconds compute.
 
+Note: Lambda packages are self-contained, so MODEL_DIR typically points to a
+relative path within the zip. Set MODEL_DIR env var when deploying if needed.
+
 Deploy:
   cd lambda
   pip install -r requirements-serving.txt -t package/
@@ -18,7 +21,8 @@ Deploy:
     --zip-file fileb://serve.zip \
     --role $LAMBDA_ROLE_ARN \
     --timeout 30 \
-    --memory-size 256
+    --memory-size 256 \
+    --environment Variables={MODEL_DIR=models}
 """
 
 import os
@@ -31,6 +35,7 @@ logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
 # Load model at cold start (reused across invocations)
+# For Lambda, MODEL_DIR defaults to 'models' (packaged in zip)
 MODEL_DIR = os.environ.get("MODEL_DIR", "models")
 model = None
 scaler = None
