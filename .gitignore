@@ -1,0 +1,79 @@
+# MLflow artifacts and runs (environment-specific)
+mlruns/
+.mlflow/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+.env
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Notebooks
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# Temporary files
+*.tmp
+.tmp/
+*.bak
+*.orig
+
+# Data (keep raw, clean processed with git)
+# data/raw/* (uncomment if you want to ignore raw data)
+data/processed/*.csv
+!data/processed/.gitkeep
+
+# Models
+models/*.joblib
+models/*.pkl
+models/*.pickle
+models/metrics.json
+!models/.gitkeep
+
+# Cache
+.cache/
+.kagglehub/
+*.cache
+
+# Logs
+*.log
+logs/
+
+# AWS
+.aws/

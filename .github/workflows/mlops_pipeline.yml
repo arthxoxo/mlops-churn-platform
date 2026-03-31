@@ -50,6 +50,10 @@ jobs:
       XDG_CACHE_HOME: ${{ github.workspace }}/.cache
       KAGGLEHUB_CACHE: ${{ github.workspace }}/.cache/kagglehub
       TMPDIR: ${{ github.workspace }}/.tmp
+      # AWS secrets exposed as env vars for use in conditionals
+      AWS_ROLE_TO_ASSUME: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
     permissions:
       id-token: write
       contents: read
@@ -70,6 +74,9 @@ jobs:
       - name: Prepare runtime directories
         run: mkdir -p "$HOME" "$XDG_CACHE_HOME" "$KAGGLEHUB_CACHE" "$TMPDIR"
 
+      - name: Clean MLflow artifacts (avoid /Users paths from macOS)
+        run: rm -rf mlruns artifacts .mlflow
+
       - name: Validate AWS configuration
         run: |
           test -n "${{ secrets.S3_BUCKET }}" || (echo "Missing S3_BUCKET secret" && exit 1)
@@ -82,18 +89,18 @@ jobs:
           fi
 
       - name: Configure AWS credentials (OIDC)
-        if: ${{ secrets.AWS_ROLE_TO_ASSUME != ''}}
+        if: ${{ env.AWS_ROLE_TO_ASSUME }}
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          role-to-assume: ${{ env.AWS_ROLE_TO_ASSUME }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Configure AWS credentials (static keys)
-        if: ${{ secrets.AWS_ROLE_TO_ASSUME == '' }}
+        if: ${{ !env.AWS_ROLE_TO_ASSUME }}
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-access-key-id: ${{ env.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ env.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Check S3 access
