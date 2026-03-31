@@ -20,7 +20,10 @@ from sklearn.metrics import (
     f1_score,
     precision_score,
     recall_score,
+    average_precision_score,
+    balanced_accuracy_score,
     classification_report,
+    confusion_matrix,
 )
 import joblib
 
@@ -77,16 +80,27 @@ def evaluate(model, scaler, X, y) -> dict:
 
     acc: float = float(accuracy_score(y, y_pred))
     auc: float = float(roc_auc_score(y, y_proba))
+    pr_auc: float = float(average_precision_score(y, y_proba))
     f1: float = float(f1_score(y, y_pred))
     prec: float = float(precision_score(y, y_pred))
     rec: float = float(recall_score(y, y_pred))
+    bal_acc: float = float(balanced_accuracy_score(y, y_pred))
+    tn, fp, fn, tp = confusion_matrix(y, y_pred).ravel()
 
     metrics = {
         "accuracy": {"value": round(acc, 4)},
+        "balanced_accuracy": {"value": round(bal_acc, 4)},
         "roc_auc": {"value": round(auc, 4)},
+        "pr_auc": {"value": round(pr_auc, 4)},
         "f1_score": {"value": round(f1, 4)},
         "precision": {"value": round(prec, 4)},
         "recall": {"value": round(rec, 4)},
+        "confusion_matrix": {
+            "tn": int(tn),
+            "fp": int(fp),
+            "fn": int(fn),
+            "tp": int(tp),
+        },
     }
 
     logger.info(f"Evaluation metrics: {json.dumps(metrics, indent=2)}")
@@ -94,12 +108,12 @@ def evaluate(model, scaler, X, y) -> dict:
     return metrics
 
 
-def write_evaluation_report(metrics: dict, output_dir: str):
+def write_evaluation_report(metrics: dict, output_dir: str, dataset_size: int):
     """Write evaluation.json — consumed by the SageMaker pipeline PropertyFile."""
     os.makedirs(output_dir, exist_ok=True)
     report = {
         "metrics": metrics,
-        "dataset_size": int(sum(1 for _ in metrics)),  # placeholder
+        "dataset_size": int(dataset_size),
     }
     output_path = os.path.join(output_dir, "evaluation.json")
     with open(output_path, "w") as f:
@@ -122,11 +136,12 @@ def main():
     metrics = evaluate(model, scaler, X_test, y_test)
 
     # Write report for pipeline
-    write_evaluation_report(metrics, OUTPUT_PATH)
+    write_evaluation_report(metrics, OUTPUT_PATH, len(y_test))
 
     # Print metrics in SageMaker-parseable format
     for name, val in metrics.items():
-        print(f"{name}: {val['value']}")
+        if isinstance(val, dict) and "value" in val:
+            print(f"{name}: {val['value']}")
 
     logger.info("Evaluation complete!")
     return metrics

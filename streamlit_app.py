@@ -1,463 +1,529 @@
-"""
-Streamlit frontend for Churn Prediction API
-Run: streamlit run streamlit_app.py
+"""Premium Streamlit frontend for Churn Prediction API.
+
+Run:
+  streamlit run streamlit_app.py
 """
 
-import streamlit as st
-import requests
+from __future__ import annotations
+
 import json
-import pandas as pd
-import numpy as np
 from typing import List
 
-# Configuration
+import numpy as np
+import pandas as pd
+import requests
+import streamlit as st
+from sklearn.preprocessing import LabelEncoder
+
 API_URL = "http://localhost:8000"
+
 st.set_page_config(
-    page_title="Churn Prediction",
-    page_icon="📊",
+    page_title="Aurelia Churn Studio",
+    page_icon="A",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
-# Custom CSS
-st.markdown("""
+st.markdown(
+    """
 <style>
-    .main {
-        padding: 2rem;
-    }
-    .metric-card {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        padding: 1.5rem;
-        border-radius: 0.5rem;
-        color: white;
-        text-align: center;
-    }
-    .positive {background: linear-gradient(135deg, #84fab0 0%, #8fd3f4 100%);}
-    .negative {background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);}
-    .info {background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);}
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap');
+
+:root {
+  --bg: #06131a;
+  --bg-2: #0b1f29;
+  --ink: #e8f0f2;
+  --muted: #9db2b8;
+  --accent: #00c2a8;
+  --accent-soft: #7de3d6;
+  --danger: #ff6b6b;
+  --gold: #d4a017;
+  --card: rgba(14, 35, 46, 0.66);
+  --border: rgba(125, 227, 214, 0.25);
+}
+
+html, body, [class*="css"] {
+  font-family: 'IBM Plex Sans', sans-serif;
+}
+
+[data-testid="stAppViewContainer"] {
+  background:
+    radial-gradient(700px 260px at 10% 0%, rgba(0, 194, 168, 0.16), transparent 60%),
+    radial-gradient(900px 380px at 100% 0%, rgba(212, 160, 23, 0.10), transparent 58%),
+    linear-gradient(165deg, var(--bg) 0%, var(--bg-2) 70%);
+}
+
+[data-testid="stSidebar"] {
+  background: rgba(6, 19, 26, 0.94);
+  border-right: 1px solid var(--border);
+}
+
+h1, h2, h3, h4 {
+  font-family: 'Space Grotesk', sans-serif;
+  letter-spacing: 0.2px;
+}
+
+.hero {
+  background: linear-gradient(120deg, rgba(0, 194, 168, 0.28), rgba(212, 160, 23, 0.20));
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  padding: 1.25rem 1.4rem;
+  backdrop-filter: blur(7px);
+  animation: fade-up 0.7s ease-out;
+}
+
+.hero .title {
+  font-size: 1.8rem;
+  font-weight: 700;
+  color: var(--ink);
+  margin-bottom: 0.15rem;
+}
+
+.hero .subtitle {
+  color: var(--muted);
+  font-size: 0.98rem;
+}
+
+.glass {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 1rem 1rem 0.8rem 1rem;
+  animation: fade-up 0.65s ease-out;
+}
+
+.kpi {
+  background: linear-gradient(140deg, rgba(0, 194, 168, 0.24), rgba(6, 19, 26, 0.4));
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 0.8rem;
+}
+
+.risk-good { color: var(--accent-soft); font-weight: 700; }
+.risk-mid { color: var(--gold); font-weight: 700; }
+.risk-bad { color: var(--danger); font-weight: 700; }
+
+[data-testid="stMetric"] {
+  background: rgba(8, 28, 38, 0.72);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 0.65rem;
+}
+
+.stButton > button {
+  border-radius: 999px;
+  border: 1px solid rgba(125, 227, 214, 0.45);
+  background: linear-gradient(90deg, #00c2a8, #12a48e);
+  color: #03241f;
+  font-weight: 700;
+}
+
+.stButton > button:hover {
+  border-color: #7de3d6;
+  box-shadow: 0 0 0 3px rgba(125, 227, 214, 0.20);
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
 </style>
-""", unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True,
+)
 
-# Title and description
-st.title("📊 Customer Churn Prediction")
-st.markdown("## Ready-to-deploy ML Model for Telecom Customer Churn")
 
-# Sidebar
-with st.sidebar:
-    st.header("🎯 Navigation")
-    page = st.radio("Select Page", ["Dashboard", "Single Prediction", "Batch Prediction", "Model Info"])
-
-# Helper functions
-@st.cache_data
-def get_model_health():
-    """Get model health status"""
+@st.cache_data(ttl=20)
+def get_health() -> dict | None:
     try:
-        response = requests.get(f"{API_URL}/health", timeout=5)
-        if response.status_code == 200:
-            return response.json()
-    except:
+        response = requests.get(f"{API_URL}/health", timeout=4)
+        response.raise_for_status()
+        return response.json()
+    except requests.RequestException:
         return None
 
-@st.cache_data
-def get_feature_names():
-    """Get feature names from API"""
+
+@st.cache_data(ttl=20)
+def get_features() -> List[str]:
     try:
-        response = requests.get(f"{API_URL}/features", timeout=5)
-        if response.status_code == 200:
-            return response.json().get("features", [])
-    except:
+        response = requests.get(f"{API_URL}/features", timeout=4)
+        response.raise_for_status()
+        return response.json().get("features", [])
+    except requests.RequestException:
         return []
 
-def make_prediction(features: List[float]):
-    """Make single prediction"""
+
+def predict_single(features: List[float]) -> dict | None:
     try:
         response = requests.post(
-            f"{API_URL}/predict",
-            json={"features": features},
-            timeout=10
+            f"{API_URL}/predict", json={"features": features}, timeout=10
         )
-        if response.status_code == 200:
-            return response.json()
-    except Exception as e:
-        st.error(f"❌ Prediction failed: {str(e)}")
-    return None
+        response.raise_for_status()
+        return response.json()
+    except requests.RequestException as exc:
+        st.error(f"Prediction request failed: {exc}")
+        return None
 
-def make_batch_prediction(instances: List[List[float]]):
-    """Make batch predictions"""
+
+def predict_batch(instances: List[List[float]]) -> dict | None:
     try:
         response = requests.post(
-            f"{API_URL}/predict/batch",
-            json={"instances": instances},
-            timeout=10
+            f"{API_URL}/predict/batch", json={"instances": instances}, timeout=15
         )
-        if response.status_code == 200:
-            return response.json()
-    except Exception as e:
-        st.error(f"❌ Batch prediction failed: {str(e)}")
-    return None
+        response.raise_for_status()
+        return response.json()
+    except requests.RequestException as exc:
+        st.error(f"Batch request failed: {exc}")
+        return None
 
-# ──────────────────────────────────────────────────────────────────────────────
-# PAGE: Dashboard
-# ──────────────────────────────────────────────────────────────────────────────
-if page == "Dashboard":
-    st.header("📈 Model Dashboard")
-    
-    # Get model health
-    health = get_model_health()
-    
-    if health:
-        col1, col2, col3, col4 = st.columns(4)
-        
-        with col1:
-            st.metric(
-                "Model Status",
-                "✅ Online",
-                "Ready to predict"
-            )
-        
-        with col2:
-            accuracy = health.get("metrics", {}).get("accuracy", 0)
-            st.metric(
-                "Accuracy",
-                f"{accuracy:.2%}",
-                "Test set performance"
-            )
-        
-        with col3:
-            roc_auc = health.get("metrics", {}).get("roc_auc", 0)
-            st.metric(
-                "ROC-AUC",
-                f"{roc_auc:.2%}",
-                "Discrimination ability"
-            )
-        
-        with col4:
-            f1_score = health.get("metrics", {}).get("f1_score", 0)
-            st.metric(
-                "F1 Score",
-                f"{f1_score:.4f}",
-                "Harmonic mean"
-            )
-        
-        st.divider()
-        
-        # Quick stats
-        st.subheader("📊 Model Specifications")
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.write("""
-            **Model Type:** XGBoost (Random Forest)
-            
-            **Dataset:** Telecom Customer Churn
-            
-            **Target Variable:** Churn (Binary: Yes/No)
-            
-            **Samples:** 7,043 customers
-            """)
-        
-        with col2:
-            st.write("""
-            **Framework:** scikit-learn + XGBoost
-            
-            **Deployment:** FastAPI + Docker
-            
-            **Accuracy Threshold:** 80%
-            
-            **Status:** ✅ PASSED
-            """)
-        
-        st.divider()
-        
-        # Model metrics visualization
-        st.subheader("📊 Performance Metrics")
-        metrics_df = pd.DataFrame({
-            "Metric": ["Accuracy", "ROC-AUC", "F1 Score"],
-            "Score": [
-                health.get("metrics", {}).get("accuracy", 0),
-                health.get("metrics", {}).get("roc_auc", 0),
-                health.get("metrics", {}).get("f1_score", 0),
-            ]
-        })
-        st.bar_chart(metrics_df.set_index("Metric"))
-    
-    else:
-        st.error("❌ Cannot connect to API. Is the server running on http://localhost:8000?")
 
-# ──────────────────────────────────────────────────────────────────────────────
-# PAGE: Single Prediction
-# ──────────────────────────────────────────────────────────────────────────────
-elif page == "Single Prediction":
-    st.header("🔮 Single Customer Prediction")
-    
-    st.info("Enter customer characteristics to predict churn probability.")
-    
-    # Create input columns
-    col1, col2, col3 = st.columns(3)
-    
-    with col1:
-        st.subheader("Demographics")
-        seniority = st.slider("Seniority (months)", 0, 72, 12)
-        tenure = st.slider("Tenure (months)", 0, 72, 12)
-        partner = st.selectbox("Has Partner", ["No", "Yes"])
-        dependent = st.selectbox("Has Dependent", ["No", "Yes"])
-    
-    with col2:
-        st.subheader("Services")
-        phone_service = st.selectbox("Phone Service", ["No", "Yes"])
-        internet_service = st.selectbox("Internet Service", ["No", "DSL", "Fiber"])
-        online_security = st.selectbox("Online Security", ["No", "Yes"])
-        streaming_tv = st.selectbox("Streaming TV", ["No", "Yes"])
-    
-    with col3:
-        st.subheader("Billing")
-        contract_type = st.selectbox("Contract Type", ["Month-to-month", "One year", "Two year"])
-        monthly_charges = st.slider("Monthly Charges ($)", 0.0, 120.0, 50.0)
-        total_charges = st.slider("Total Charges ($)", 0.0, 8000.0, 1000.0)
-        paperless_billing = st.selectbox("Paperless Billing", ["No", "Yes"])
-    
-    # Create features array (19 features expected)
-    features = [
-        int(seniority > 12),  # 0: senior
-        tenure,               # 1: tenure
-        int(partner == "Yes"), # 2: partner
-        int(dependent == "Yes"), # 3: dependent
-        int(phone_service == "Yes"), # 4: phoneService
-        int(internet_service in ["DSL", "Fiber"]), # 5: internetService
-        int(online_security == "Yes"), # 6: onlineSecurity
-        int(streaming_tv == "Yes"), # 7: streamingTV
-        int(contract_type != "Month-to-month"), # 8: contract
-        int(paperless_billing == "Yes"), # 9: paperlessBilling
-        1 if contract_type == "Two year" else (0.5 if contract_type == "One year" else 0), # 10: contractDuration
-        int(internet_service == "Fiber"), # 11: fiberOptic
-        0, 0, 0, 0, 0, 0, # 12-18: other features (placeholder)
-        monthly_charges,
-        total_charges
-    ]
-    
-    # Make prediction
-    if st.button("🎯 Predict Churn", type="primary", use_container_width=True):
-        with st.spinner("Making prediction..."):
-            result = make_prediction(features)
-        
-        if result:
-            col1, col2 = st.columns([1, 1])
-            
-            with col1:
-                churn_prob = result.get("churn_probability", 0)
-                churn_status = "🔴 WILL CHURN" if result["churn"] else "🟢 WILL STAY"
-                
-                st.markdown(f"""
-                <div style='background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
-                           padding: 2rem; border-radius: 0.5rem; color: white; text-align: center;'>
-                    <h3>Prediction Result</h3>
-                    <h1>{churn_status}</h1>
-                    <h2>{churn_prob:.1%} probability</h2>
-                </div>
-                """, unsafe_allow_html=True)
-            
-            with col2:
-                # Gauge chart
-                fig_data = {
-                    "probability": churn_prob * 100,
-                    "safe_zone": max(0, 100 - churn_prob * 100)
-                }
-                
-                st.metric(
-                    "Churn Risk Level",
-                    "🔴 HIGH" if churn_prob > 0.7 else ("🟡 MEDIUM" if churn_prob > 0.3 else "🟢 LOW"),
-                    f"{churn_prob:.1%}"
-                )
-                
-                # Recommendation
-                st.info("""
-                **Recommendation:**
-                
-                """ + (
-                    "⚠️ **High Risk** - Consider retention strategies (discounts, loyalty programs)"
-                    if churn_prob > 0.7 else (
-                    "⚠️ **Medium Risk** - Monitor customer satisfaction"
-                    if churn_prob > 0.3 else
-                    "✅ **Low Risk** - Maintain current service quality"
-                ))
-                )
+def parse_vector(text: str) -> List[float] | None:
+    cleaned = text.strip()
+    if not cleaned:
+        return None
+    try:
+        if cleaned.startswith("["):
+            values = json.loads(cleaned)
+        else:
+            values = [float(x.strip()) for x in cleaned.split(",") if x.strip()]
+        return [float(v) for v in values]
+    except (ValueError, json.JSONDecodeError):
+        return None
 
-# ──────────────────────────────────────────────────────────────────────────────
-# PAGE: Batch Prediction
-# ──────────────────────────────────────────────────────────────────────────────
-elif page == "Batch Prediction":
-    st.header("📦 Batch Predictions")
-    
-    st.info("Upload a CSV file with customer data to get predictions for multiple customers.")
-    
-    # Sample data template
-    with st.expander("📋 See Sample CSV Format"):
-        sample_df = pd.DataFrame({
-            "feature_0": [0, 1, 0],
-            "feature_1": [12, 24, 6],
-            "feature_2": [1, 0, 1],
-            "feature_3": [0, 1, 0],
-            # ... 16 more features
-        })
-        st.write("Your CSV should have 19 numeric columns (one per feature)")
-        st.csv(sample_df.to_csv(index=False))
-    
-    col1, col2 = st.columns([2, 1])
-    
-    with col1:
-        uploaded_file = st.file_uploader("Upload CSV", type=["csv"])
-    
-    with col2:
-        num_samples = st.number_input("Or generate test samples:", min_value=1, max_value=100, value=5)
-    
-    if uploaded_file:
-        df = pd.read_csv(uploaded_file)
-        st.write(f"Loaded {len(df)} rows")
-        
-        if st.button("🚀 Predict All", use_container_width=True):
-            with st.spinner("Making predictions..."):
-                # Convert to list of lists
-                instances = df.iloc[:, :19].values.tolist()
-                result = make_batch_prediction(instances)
-        
-            if result:
-                predictions = result.get("predictions", [])
-                
-                # Add predictions to dataframe
-                df_results = df.copy()
-                df_results["churn_prediction"] = [p["churn"] for p in predictions]
-                df_results["churn_probability"] = [p["churn_probability"] for p in predictions]
-                df_results["risk_level"] = df_results["churn_probability"].apply(
-                    lambda x: "🔴 HIGH" if x > 0.7 else ("🟡 MEDIUM" if x > 0.3 else "🟢 LOW")
-                )
-                
-                st.subheader("Results")
-                st.dataframe(df_results, use_container_width=True)
-                
-                # Summary stats
-                col1, col2, col3 = st.columns(3)
-                with col1:
-                    churn_count = sum(1 for p in predictions if p["churn"])
-                    st.metric("Predicted Churners", churn_count, f"({churn_count/len(predictions):.1%})")
-                with col2:
-                    avg_prob = np.mean([p["churn_probability"] for p in predictions])
-                    st.metric("Avg Churn Probability", f"{avg_prob:.1%}")
-                with col3:
-                    high_risk = sum(1 for p in predictions if p["churn_probability"] > 0.7)
-                    st.metric("High Risk Customers", high_risk)
-    
-    elif st.button("📊 Generate Test Batch"):
-        with st.spinner("Generating test data..."):
-            # Generate random test data
-            test_data = np.random.rand(num_samples, 19).tolist()
-            result = make_batch_prediction(test_data)
-        
-        if result:
-            predictions = result.get("predictions", [])
-            
-            # Display results
-            df_results = pd.DataFrame({
-                "Customer_ID": [f"CUST_{i:04d}" for i in range(num_samples)],
-                "Churn_Prediction": ["Yes" if p["churn"] else "No" for p in predictions],
-                "Churn_Probability": [f"{p['churn_probability']:.2%}" for p in predictions],
-            })
-            
-            st.dataframe(df_results, use_container_width=True)
 
-# ──────────────────────────────────────────────────────────────────────────────
-# PAGE: Model Info
-# ──────────────────────────────────────────────────────────────────────────────
-elif page == "Model Info":
-    st.header("ℹ️ Model Information")
-    
-    col1, col2 = st.columns([1, 1])
-    
-    with col1:
-        st.subheader("🤖 Model Architecture")
-        st.write("""
-        **Algorithm:** XGBoost (Gradient Boosting)
-        
-        **Framework:** scikit-learn
-        
-        **Training Data:** 7,043 customers
-        
-        **Features:** 19 customer attributes
-        
-        **Target:** Binary (Churn: Yes/No)
-        """)
-    
-    with col2:
-        st.subheader("📊 Performance Metrics")
-        st.write("""
-        **Accuracy:** 80.62%
-        
-        **ROC-AUC:** 84.35%
-        
-        **F1 Score:** 0.5674
-        
-        **Precision/Recall:** Balanced
-        """)
-    
-    st.divider()
-    
-    st.subheader("📚 Feature Descriptions")
-    features_info = {
-        "0": "Senior Citizen (0/1)",
-        "1": "Tenure (months)",
-        "2": "Partner (0/1)",
-        "3": "Dependent (0/1)",
-        "4": "Phone Service (0/1)",
-        "5": "Internet Service (0/1)",
-        "6": "Online Security (0/1)",
-        "7": "Streaming TV (0/1)",
-        "8": "Contract Type (0/1)",
-        "9": "Paperless Billing (0/1)",
-        "10": "Contract Duration (0-1)",
-        "11": "Fiber Optic (0/1)",
-        "12-18": "Additional service features",
-        "19": "Monthly Charges ($)",
-        "20": "Total Charges ($)",
-    }
-    
-    for idx, description in features_info.items():
-        st.write(f"**Feature {idx}:** {description}")
-    
-    st.divider()
-    
-    st.subheader("🚀 Deployment Info")
-    col1, col2, col3 = st.columns(3)
-    
-    with col1:
-        st.write("""
-        **API:** FastAPI
-        
-        **Server:** Uvicorn
-        
-        **Framework:** Python 3.10
-        """)
-    
-    with col2:
-        st.write("""
-        **Containerization:** Docker
-        
-        **Registry:** AWS ECR
-        
-        **Port:** 8000
-        """)
-    
-    with col3:
-        st.write("""
-        **CI/CD:** GitHub Actions
-        
-        **Storage:** AWS S3
-        
-        **MLOps:** MLflow
-        """)
+def risk_label(probability: float) -> str:
+    if probability >= 0.7:
+        return "HIGH"
+    if probability >= 0.35:
+        return "MEDIUM"
+    return "LOW"
 
-# Footer
-st.divider()
-st.markdown("""
-<div style='text-align: center; color: #999; font-size: 0.85rem'>
-    🚀 MLOps Churn Prediction Platform | Powered by FastAPI + Streamlit | © 2026
+
+def transform_raw_telco_csv(df: pd.DataFrame, expected_features: List[str]) -> pd.DataFrame:
+    """Transform raw Telco CSV into model-ready numeric feature matrix."""
+    transformed = df.copy()
+
+    if "customerID" in transformed.columns:
+        transformed = transformed.drop(columns=["customerID"])
+
+    if "TotalCharges" in transformed.columns:
+        transformed["TotalCharges"] = pd.to_numeric(
+            transformed["TotalCharges"], errors="coerce"
+        )
+        transformed["TotalCharges"] = transformed["TotalCharges"].fillna(
+            transformed["TotalCharges"].median()
+        )
+
+    if "Churn" in transformed.columns:
+        transformed["Churn"] = (
+            transformed["Churn"].astype(str).str.strip().str.lower() == "yes"
+        ).astype(int)
+
+    categorical_cols = transformed.select_dtypes(include="object").columns.tolist()
+    encoder = LabelEncoder()
+    for col in categorical_cols:
+        transformed[col] = encoder.fit_transform(transformed[col].astype(str))
+
+    if "Churn" in transformed.columns:
+        transformed = transformed.drop(columns=["Churn"])
+
+    for col in expected_features:
+        if col not in transformed.columns:
+            transformed[col] = 0
+
+    transformed = transformed[expected_features].copy()
+    transformed = transformed.apply(pd.to_numeric, errors="coerce").fillna(0.0)
+    return transformed
+
+
+with st.sidebar:
+    st.markdown("### Aurelia Churn Studio")
+    st.caption("Premium inference cockpit")
+    page = st.radio(
+        "Navigate",
+        ["Dashboard", "Single Prediction", "Batch Prediction", "Model Profile"],
+        label_visibility="collapsed",
+    )
+    st.markdown("---")
+    st.caption("API Endpoint")
+    st.code(API_URL)
+
+
+st.markdown(
+    """
+<div class="hero">
+  <div class="title">Aurelia Churn Studio</div>
+  <div class="subtitle">Realtime churn intelligence with production-grade API orchestration.</div>
 </div>
-""", unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True,
+)
+
+st.write("")
+
+health = get_health()
+features = get_features()
+feature_count = len(features) if features else 19
+
+if page == "Dashboard":
+    if not health:
+        st.error("API is offline. Start FastAPI server on localhost:8000 first.")
+    else:
+        metrics = health.get("metrics", {})
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("Service", "Online", "Healthy")
+        c2.metric("Accuracy", f"{metrics.get('accuracy', 0.0):.2%}")
+        c3.metric("ROC-AUC", f"{metrics.get('roc_auc', 0.0):.2%}")
+        c4.metric("F1 Score", f"{metrics.get('f1_score', 0.0):.4f}")
+
+        st.write("")
+        left, right = st.columns([1.2, 1])
+
+        with left:
+            st.markdown('<div class="glass">', unsafe_allow_html=True)
+            st.subheader("Performance Snapshot")
+            chart_df = pd.DataFrame(
+                {
+                    "Metric": ["Accuracy", "ROC-AUC", "F1 Score"],
+                    "Score": [
+                        metrics.get("accuracy", 0.0),
+                        metrics.get("roc_auc", 0.0),
+                        metrics.get("f1_score", 0.0),
+                    ],
+                }
+            )
+            st.bar_chart(chart_df.set_index("Metric"), color="#00c2a8")
+            st.markdown("</div>", unsafe_allow_html=True)
+
+        with right:
+            st.markdown('<div class="glass">', unsafe_allow_html=True)
+            st.subheader("Deployment")
+            st.write("Model: XGBoost classifier")
+            st.write(f"Feature vector width: {feature_count}")
+            st.write("Serving: FastAPI + Uvicorn")
+            st.write("Packaging: Docker + ECR")
+            st.write("Pipeline gate: Accuracy >= 80%")
+            st.markdown("</div>", unsafe_allow_html=True)
+
+
+elif page == "Single Prediction":
+    st.subheader("Single Prediction")
+    st.caption(
+        "Use quick profile presets or provide an exact numeric vector. "
+        f"Expected features: {feature_count}."
+    )
+
+    mode = st.segmented_control(
+        "Input mode", ["Preset Profile", "Manual Vector"], default="Preset Profile"
+    )
+
+    if mode == "Preset Profile":
+        profile = st.selectbox(
+            "Profile",
+            [
+                "Low Risk Baseline",
+                "Mid Risk Customer",
+                "High Risk Customer",
+            ],
+        )
+        if profile == "Low Risk Baseline":
+            vector = [0, 48, 1, 0, 1, 1, 1, 1, 1, 1, 0, 0, 0, 1, 0, 0, 0, 45.5, 2190.0]
+        elif profile == "Mid Risk Customer":
+            vector = [1, 18, 0, 0, 1, 1, 0, 1, 0, 1, 1, 1, 0, 1, 1, 0, 1, 79.9, 1430.0]
+        else:
+            vector = [1, 6, 0, 1, 1, 1, 0, 0, 0, 1, 1, 1, 1, 1, 0, 1, 1, 96.8, 612.0]
+
+    else:
+        default_vector = ",".join(["0"] * max(feature_count - 2, 0) + ["29.85", "29.85"])
+        vector_text = st.text_area(
+            "Comma-separated feature vector",
+            value=default_vector,
+            height=110,
+            help="You can also paste JSON list format such as [0,1,2,...].",
+        )
+        parsed = parse_vector(vector_text)
+        if parsed is None:
+            st.warning("Invalid vector format.")
+            vector = []
+        else:
+            vector = parsed
+
+    if st.button("Run Prediction", use_container_width=True):
+        if len(vector) != feature_count:
+            st.error(f"Feature vector must have exactly {feature_count} values.")
+        else:
+            result = predict_single(vector)
+            if result:
+                probability = float(result.get("churn_probability", 0.0))
+                label = risk_label(probability)
+                css_class = (
+                    "risk-bad"
+                    if label == "HIGH"
+                    else "risk-mid"
+                    if label == "MEDIUM"
+                    else "risk-good"
+                )
+                a, b = st.columns([1.1, 1])
+                with a:
+                    st.markdown('<div class="glass">', unsafe_allow_html=True)
+                    st.subheader("Decision")
+                    st.metric("Predicted Churn", "Yes" if result.get("churn") else "No")
+                    st.metric("Probability", f"{probability:.2%}")
+                    st.markdown(
+                        f"Risk Tier: <span class='{css_class}'>{label}</span>",
+                        unsafe_allow_html=True,
+                    )
+                    st.markdown("</div>", unsafe_allow_html=True)
+                with b:
+                    st.markdown('<div class="glass">', unsafe_allow_html=True)
+                    st.subheader("Retention Action")
+                    if label == "HIGH":
+                        st.write("Offer targeted retention package in first contact.")
+                        st.write("Escalate to account specialist within 24 hours.")
+                    elif label == "MEDIUM":
+                        st.write("Schedule proactive support outreach.")
+                        st.write("Promote annual contract incentives.")
+                    else:
+                        st.write("Maintain service quality and monitor sentiment.")
+                        st.write("Keep customer in low-touch loyalty stream.")
+                    st.markdown("</div>", unsafe_allow_html=True)
+
+
+elif page == "Batch Prediction":
+    st.subheader("Batch Prediction")
+    mode = st.radio(
+        "CSV Type",
+        ["Raw Telco CSV (with original columns)", "Numeric Feature CSV"],
+        horizontal=True,
+    )
+
+    if mode == "Raw Telco CSV (with original columns)":
+        st.caption(
+            "Upload the original Telco file (columns like gender, tenure, Contract, TotalCharges, Churn). "
+            "The app will auto-clean, encode, align features, and predict churn for each row."
+        )
+    else:
+        st.caption(
+            "Upload CSV with numeric features. "
+            f"First {feature_count} columns are used as model features."
+        )
+
+    uploaded = st.file_uploader("Upload CSV", type=["csv"])
+
+    if uploaded is not None:
+        df = pd.read_csv(uploaded)
+        st.write(f"Rows detected: {len(df)}")
+        st.dataframe(df.head(8), use_container_width=True)
+
+        if st.button("Run Batch Prediction", use_container_width=True):
+            if mode == "Raw Telco CSV (with original columns)":
+                if not features:
+                    st.error("Could not fetch model feature names from API. Check /features endpoint.")
+                else:
+                    model_df = transform_raw_telco_csv(df, features)
+                    response = predict_batch(model_df.values.tolist())
+                    if response:
+                        preds = response.get("predictions", [])
+                        out = df.copy()
+                        out["predicted_churn"] = [p.get("churn", 0) for p in preds]
+                        out["churn_probability"] = [
+                            p.get("churn_probability", 0.0) for p in preds
+                        ]
+                        out["risk_tier"] = out["churn_probability"].apply(risk_label)
+
+                        c1, c2, c3 = st.columns(3)
+                        c1.metric("Rows Scored", len(out))
+                        c2.metric("Predicted Churners", int(out["predicted_churn"].sum()))
+                        c3.metric("Average Risk", f"{out['churn_probability'].mean():.2%}")
+
+                        st.dataframe(out, use_container_width=True)
+                        csv_bytes = out.to_csv(index=False).encode("utf-8")
+                        st.download_button(
+                            "Download Scored CSV",
+                            data=csv_bytes,
+                            file_name="scored_telco_customers.csv",
+                            mime="text/csv",
+                        )
+            else:
+                if df.shape[1] < feature_count:
+                    st.error(
+                        f"Need at least {feature_count} columns. Found {df.shape[1]}."
+                    )
+                else:
+                    instances = df.iloc[:, :feature_count].astype(float).values.tolist()
+                    response = predict_batch(instances)
+                    if response:
+                        preds = response.get("predictions", [])
+                        out = df.copy()
+                        out["predicted_churn"] = [p.get("churn", 0) for p in preds]
+                        out["churn_probability"] = [
+                            p.get("churn_probability", 0.0) for p in preds
+                        ]
+                        out["risk_tier"] = out["churn_probability"].apply(risk_label)
+
+                        c1, c2, c3 = st.columns(3)
+                        c1.metric("Rows Scored", len(out))
+                        c2.metric("Predicted Churners", int(out["predicted_churn"].sum()))
+                        c3.metric("Average Risk", f"{out['churn_probability'].mean():.2%}")
+
+                        st.dataframe(out, use_container_width=True)
+                        csv_bytes = out.to_csv(index=False).encode("utf-8")
+                        st.download_button(
+                            "Download Scored CSV",
+                            data=csv_bytes,
+                            file_name="scored_customers.csv",
+                            mime="text/csv",
+                        )
+
+    st.markdown('<div class="glass">', unsafe_allow_html=True)
+    st.subheader("Quick Synthetic Run")
+    sample_rows = st.slider("Rows", 5, 200, 30)
+    if st.button("Generate and Score", use_container_width=True):
+        synthetic = np.random.normal(loc=0.5, scale=0.2, size=(sample_rows, feature_count))
+        synthetic = np.clip(synthetic, 0, None)
+        response = predict_batch(synthetic.tolist())
+        if response:
+            preds = response.get("predictions", [])
+            synthetic_df = pd.DataFrame(synthetic, columns=[f"feature_{i}" for i in range(feature_count)])
+            synthetic_df["predicted_churn"] = [p.get("churn", 0) for p in preds]
+            synthetic_df["churn_probability"] = [p.get("churn_probability", 0.0) for p in preds]
+            st.dataframe(synthetic_df.head(25), use_container_width=True)
+    st.markdown("</div>", unsafe_allow_html=True)
+
+
+elif page == "Model Profile":
+    st.subheader("Model Profile")
+    left, right = st.columns([1, 1])
+
+    with left:
+        st.markdown('<div class="glass">', unsafe_allow_html=True)
+        st.write("Algorithm: Gradient-boosted ensemble")
+        st.write("Runtime: FastAPI on Uvicorn")
+        st.write("CI/CD: GitHub Actions")
+        st.write("Registry: MLflow + ECR")
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    with right:
+        st.markdown('<div class="glass">', unsafe_allow_html=True)
+        st.write("Data: Telco customer churn")
+        st.write(f"Expected feature count: {feature_count}")
+        st.write("Decision threshold: model-native probability")
+        st.write("Quality gate: Accuracy >= 0.80")
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    if features:
+        st.write("")
+        st.markdown('<div class="glass">', unsafe_allow_html=True)
+        st.subheader("Feature Map")
+        st.dataframe(pd.DataFrame({"feature": features}), use_container_width=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+
+
+st.write("")
+st.caption("Aurelia Churn Studio - premium UI layer for the local churn inference API")
