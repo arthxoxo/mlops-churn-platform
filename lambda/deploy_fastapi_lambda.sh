@@ -8,7 +8,7 @@ set -euo pipefail
 #   export FUNCTION_NAME=mlops-churn-fastapi
 #   bash lambda/deploy_fastapi_lambda.sh
 
-AWS_REGION="${AWS_REGION:-us-east-1}"
+AWS_REGION="${AWS_REGION:-ap-south-1}"
 FUNCTION_NAME="${FUNCTION_NAME:-mlops-churn-fastapi}"
 RUNTIME="python3.10"
 HANDLER="fastapi_handler.handler"
