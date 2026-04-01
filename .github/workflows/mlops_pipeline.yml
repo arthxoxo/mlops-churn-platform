@@ -5,6 +5,8 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  schedule:
+    - cron: "0 6 * * *"  # daily retraining at 06:00 UTC
   workflow_dispatch:  # allow manual trigger
 
   
@@ -53,6 +55,12 @@ jobs:
       TMPDIR: ${{ github.workspace }}/.tmp
       ECR_PUSH_ENABLED: ${{ secrets.ECR_PUSH_ENABLED }}
       ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY }}
+      LAMBDA_DEPLOY_ENABLED: ${{ secrets.LAMBDA_DEPLOY_ENABLED }}
+      SERVING_FUNCTION_NAME: ${{ secrets.SERVING_FUNCTION_NAME }}
+      DRIFT_FUNCTION_NAME: ${{ secrets.DRIFT_FUNCTION_NAME }}
+      LAMBDA_ROLE_ARN: ${{ secrets.LAMBDA_ROLE_ARN }}
+      MONITORING_SETUP_ENABLED: ${{ secrets.MONITORING_SETUP_ENABLED }}
+      SNS_TOPIC_NAME: ${{ secrets.SNS_TOPIC_NAME }}
       # AWS secrets exposed as env vars for use in conditionals
       AWS_ROLE_TO_ASSUME: ${{ secrets.AWS_ROLE_TO_ASSUME }}
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -94,7 +102,7 @@ jobs:
       - name: Validate AWS configuration
         run: |
           test -n "${{ secrets.S3_BUCKET }}" || (echo "Missing S3_BUCKET secret" && exit 1)
-          if [ -n "${{ secrets.AWS_ROLE_TO_ASSUME }}" ]; then
+          if [ -n "${AWS_ROLE_TO_ASSUME}" ]; then
             echo "Using OIDC role authentication"
           else
             test -n "${{ secrets.AWS_ACCESS_KEY_ID }}" || (echo "Missing AWS_ACCESS_KEY_ID secret" && exit 1)
@@ -234,6 +242,87 @@ jobs:
       - name: Skip Docker push
         if: success() && env.ECR_PUSH_ENABLED != 'true'
         run: echo "Skipping Docker push. Set secrets.ECR_PUSH_ENABLED=true and secrets.ECR_REPOSITORY to enable ECR publishing."
+
+      - name: Auto-deploy FastAPI Lambda
+        if: success() && env.LAMBDA_DEPLOY_ENABLED == 'true'
+        env:
+          FUNCTION_NAME: ${{ env.SERVING_FUNCTION_NAME }}
+          LAMBDA_ROLE_ARN: ${{ env.LAMBDA_ROLE_ARN }}
+        run: |
+          if [ -z "${FUNCTION_NAME}" ]; then
+            echo "SERVING_FUNCTION_NAME is empty. Set this secret to enable Lambda deployment."
+            exit 1
+          fi
+          bash lambda/deploy_fastapi_lambda.sh
+
+      - name: Deploy/Update Drift Monitor Lambda
+        if: success() && env.LAMBDA_DEPLOY_ENABLED == 'true'
+        env:
+          FUNCTION_NAME: ${{ env.DRIFT_FUNCTION_NAME }}
+          LAMBDA_ROLE_ARN: ${{ env.LAMBDA_ROLE_ARN }}
+        run: |
+          if [ -z "${FUNCTION_NAME}" ]; then
+            echo "DRIFT_FUNCTION_NAME is empty. Set this secret to enable drift Lambda deployment."
+            exit 1
+          fi
+
+          ROOT_DIR="$PWD"
+          LAMBDA_DIR="$ROOT_DIR/lambda"
+          PKG_DIR="$LAMBDA_DIR/drift-package"
+          ZIP_PATH="$LAMBDA_DIR/drift.zip"
+
+          rm -rf "$PKG_DIR" "$ZIP_PATH"
+          mkdir -p "$PKG_DIR"
+
+          python -m pip install -r "$LAMBDA_DIR/requirements.txt" -t "$PKG_DIR"
+          cp "$LAMBDA_DIR/drift_handler.py" "$PKG_DIR/"
+
+          (
+            cd "$PKG_DIR"
+            zip -qr "$ZIP_PATH" .
+          )
+
+          if aws lambda get-function --function-name "$FUNCTION_NAME" --region "$AWS_REGION" >/dev/null 2>&1; then
+            aws lambda update-function-code \
+              --function-name "$FUNCTION_NAME" \
+              --zip-file "fileb://$ZIP_PATH" \
+              --region "$AWS_REGION" >/dev/null
+
+            aws lambda update-function-configuration \
+              --function-name "$FUNCTION_NAME" \
+              --handler drift_handler.handler \
+              --runtime python3.10 \
+              --timeout 300 \
+              --memory-size 512 \
+              --environment "Variables={S3_BUCKET=$S3_BUCKET,DRIFT_THRESHOLD=0.20}" \
+              --region "$AWS_REGION" >/dev/null
+          else
+            if [ -z "${LAMBDA_ROLE_ARN}" ]; then
+              echo "LAMBDA_ROLE_ARN is required to create drift Lambda function."
+              exit 1
+            fi
+
+            aws lambda create-function \
+              --function-name "$FUNCTION_NAME" \
+              --runtime python3.10 \
+              --handler drift_handler.handler \
+              --zip-file "fileb://$ZIP_PATH" \
+              --role "$LAMBDA_ROLE_ARN" \
+              --timeout 300 \
+              --memory-size 512 \
+              --environment "Variables={S3_BUCKET=$S3_BUCKET,DRIFT_THRESHOLD=0.20}" \
+              --region "$AWS_REGION" >/dev/null
+          fi
+
+          echo "Drift monitor Lambda deployed: $FUNCTION_NAME"
+
+      - name: Bootstrap monitoring infrastructure
+        if: success() && env.MONITORING_SETUP_ENABLED == 'true' && env.LAMBDA_DEPLOY_ENABLED == 'true'
+        env:
+          LAMBDA_FUNCTION_NAME: ${{ env.DRIFT_FUNCTION_NAME }}
+          SNS_TOPIC_NAME: ${{ env.SNS_TOPIC_NAME }}
+        run: |
+          python infra/cloudwatch_alarms.py
 
       - name: Post pipeline status
         if: always()

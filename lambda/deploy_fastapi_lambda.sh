@@ -15,11 +15,6 @@ HANDLER="fastapi_handler.handler"
 TIMEOUT="30"
 MEMORY_SIZE="1024"
 
-if [[ -z "${LAMBDA_ROLE_ARN:-}" ]]; then
-  echo "LAMBDA_ROLE_ARN is required."
-  exit 1
-fi
-
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 LAMBDA_DIR="$ROOT_DIR/lambda"
 PKG_DIR="$LAMBDA_DIR/fastapi-package"
@@ -55,6 +50,10 @@ if aws lambda get-function --function-name "$FUNCTION_NAME" --region "$AWS_REGIO
     --region "$AWS_REGION" >/dev/null
 else
   echo "Creating new Lambda function: $FUNCTION_NAME"
+  if [[ -z "${LAMBDA_ROLE_ARN:-}" ]]; then
+    echo "LAMBDA_ROLE_ARN is required to create function $FUNCTION_NAME."
+    exit 1
+  fi
   aws lambda create-function \
     --function-name "$FUNCTION_NAME" \
     --runtime "$RUNTIME" \

@@ -234,6 +234,20 @@ Add in GitHub → Settings → Secrets:
 | `AWS_SECRET_ACCESS_KEY` | Your IAM secret |
 | `S3_BUCKET` | Your S3 bucket name |
 
+Optional (enable full zero-manual AWS rollout):
+
+| Secret | Value |
+|---|---|
+| `AWS_ROLE_TO_ASSUME` | Optional OIDC role ARN (recommended) |
+| `LAMBDA_DEPLOY_ENABLED` | `true` to auto-deploy Lambda functions |
+| `SERVING_FUNCTION_NAME` | e.g. `mlops-churn-fastapi` |
+| `DRIFT_FUNCTION_NAME` | e.g. `mlops-drift-monitor` |
+| `LAMBDA_ROLE_ARN` | Required only when creating functions |
+| `MONITORING_SETUP_ENABLED` | `true` to auto-apply CloudWatch/SNS resources |
+| `SNS_TOPIC_NAME` | e.g. `mlops-alerts` |
+
+The workflow runs on push to `main` and also daily (`0 6 * * *`), so model refresh and production rollout can happen automatically without manual steps.
+
 ---
 
 ## Project Structure
@@ -298,7 +312,7 @@ mlops-churn-platform/
 ## Key MLOps Concepts Demonstrated
 
 - ✅ **Experiment tracking** with MLflow
-- ✅ **Automated retraining** on code push via GitHub Actions
+- ✅ **Automated retraining** on code push + daily schedule via GitHub Actions
 - ✅ **Quality gates** — pipeline fails if accuracy drops below threshold
 - ✅ **Model registry** — versioned models with MLflow
 - ✅ **Local serving** — Docker + FastAPI
@@ -306,5 +320,5 @@ mlops-churn-platform/
 - ✅ **Data drift detection** — Evidently AI + Lambda scheduled monitoring
 - ✅ **CloudWatch observability** — dashboards, alarms, custom metrics
 - ✅ **Alerting pipeline** — SNS notifications for drift/accuracy/latency
-- ✅ **CI/CD** — lint, test, train, deploy on every push
+- ✅ **CI/CD** — lint, test, train, deploy, and monitoring bootstrap automatically
 - ✅ **100% free tier** — no paid AWS services
