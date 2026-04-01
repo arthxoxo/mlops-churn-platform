@@ -243,29 +243,45 @@ jobs:
         if: success() && env.ECR_PUSH_ENABLED != 'true'
         run: echo "Skipping Docker push. Set secrets.ECR_PUSH_ENABLED=true and secrets.ECR_REPOSITORY to enable ECR publishing."
 
-      - name: Auto-deploy FastAPI Lambda
-        if: success() && env.LAMBDA_DEPLOY_ENABLED == 'true'
-        env:
-          FUNCTION_NAME: ${{ env.SERVING_FUNCTION_NAME }}
-          LAMBDA_ROLE_ARN: ${{ env.LAMBDA_ROLE_ARN }}
+      - name: Lambda deployment mode
+        if: success()
         run: |
-          if [ -z "${FUNCTION_NAME}" ]; then
-            echo "SERVING_FUNCTION_NAME is empty. Set this secret to enable Lambda deployment."
+          if [ "$GITHUB_REF" = "refs/heads/main" ] && [ "${LAMBDA_DEPLOY_ENABLED}" != "false" ]; then
+            echo "Lambda deployment is ENABLED for main branch."
+            echo "Set LAMBDA_DEPLOY_ENABLED=false only if you intentionally want to skip deploy."
+          else
+            echo "Lambda deployment is DISABLED for this run."
+          fi
+
+      - name: Validate Lambda deploy permissions
+        if: success() && github.ref == 'refs/heads/main' && env.LAMBDA_DEPLOY_ENABLED != 'false'
+        run: |
+          set -euo pipefail
+
+          # Validate basic Lambda permissions before packaging/deploy.
+          if aws lambda get-account-settings --region "$AWS_REGION" >/dev/null 2>&1; then
+            echo "Lambda read permissions check passed."
+          else
+            echo "Missing required Lambda permissions for deployment role/user."
+            echo "Need at least lambda:GetAccountSettings and create/update permissions."
             exit 1
           fi
+
+      - name: Auto-deploy FastAPI Lambda
+        if: success() && github.ref == 'refs/heads/main' && env.LAMBDA_DEPLOY_ENABLED != 'false'
+        env:
+          FUNCTION_NAME: ${{ env.SERVING_FUNCTION_NAME || 'mlops-churn-fastapi' }}
+          LAMBDA_ROLE_ARN: ${{ env.LAMBDA_ROLE_ARN }}
+        run: |
           bash lambda/deploy_fastapi_lambda.sh
+          echo "Serving Lambda deployed: ${FUNCTION_NAME}"
 
       - name: Deploy/Update Drift Monitor Lambda
-        if: success() && env.LAMBDA_DEPLOY_ENABLED == 'true'
+        if: success() && github.ref == 'refs/heads/main' && env.LAMBDA_DEPLOY_ENABLED != 'false'
         env:
-          FUNCTION_NAME: ${{ env.DRIFT_FUNCTION_NAME }}
+          FUNCTION_NAME: ${{ env.DRIFT_FUNCTION_NAME || 'mlops-drift-monitor' }}
           LAMBDA_ROLE_ARN: ${{ env.LAMBDA_ROLE_ARN }}
         run: |
-          if [ -z "${FUNCTION_NAME}" ]; then
-            echo "DRIFT_FUNCTION_NAME is empty. Set this secret to enable drift Lambda deployment."
-            exit 1
-          fi
-
           ROOT_DIR="$PWD"
           LAMBDA_DIR="$ROOT_DIR/lambda"
           PKG_DIR="$LAMBDA_DIR/drift-package"
@@ -317,9 +333,9 @@ jobs:
           echo "Drift monitor Lambda deployed: $FUNCTION_NAME"
 
       - name: Bootstrap monitoring infrastructure
-        if: success() && env.MONITORING_SETUP_ENABLED == 'true' && env.LAMBDA_DEPLOY_ENABLED == 'true'
+        if: success() && env.MONITORING_SETUP_ENABLED == 'true' && github.ref == 'refs/heads/main' && env.LAMBDA_DEPLOY_ENABLED != 'false'
         env:
-          LAMBDA_FUNCTION_NAME: ${{ env.DRIFT_FUNCTION_NAME }}
+          LAMBDA_FUNCTION_NAME: ${{ env.DRIFT_FUNCTION_NAME || 'mlops-drift-monitor' }}
           SNS_TOPIC_NAME: ${{ env.SNS_TOPIC_NAME }}
         run: |
           python infra/cloudwatch_alarms.py
