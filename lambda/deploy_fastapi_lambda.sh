@@ -31,7 +31,9 @@ IMAGE_URI="${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}"
 
 echo "Ensuring ECR repository exists: ${ECR_REPOSITORY}"
 if ! aws ecr describe-repositories --repository-names "$ECR_REPOSITORY" --region "$AWS_REGION" >/dev/null 2>&1; then
-  aws ecr create-repository --repository-name "$ECR_REPOSITORY" --region "$AWS_REGION" >/dev/null
+  echo "ECR repository not found or access denied: ${ECR_REPOSITORY}"
+  echo "Create it once in AWS Console (or grant ecr:CreateRepository), then rerun CI."
+  exit 1
 fi
 
 echo "Logging into ECR: ${ECR_REGISTRY}"
