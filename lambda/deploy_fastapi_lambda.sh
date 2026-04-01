@@ -36,6 +36,36 @@ if ! aws ecr describe-repositories --repository-names "$ECR_REPOSITORY" --region
   exit 1
 fi
 
+echo "Configuring ECR repository policy for Lambda image pulls"
+REPO_POLICY_FILE="$(mktemp)"
+cat > "$REPO_POLICY_FILE" <<EOF
+{
+  "Version": "2008-10-17",
+  "Statement": [
+    {
+      "Sid": "AllowLambdaServicePull",
+      "Effect": "Allow",
+      "Principal": {
+        "Service": "lambda.amazonaws.com"
+      },
+      "Action": [
+        "ecr:BatchGetImage",
+        "ecr:GetDownloadUrlForLayer"
+      ]
+    }
+  ]
+}
+EOF
+
+if ! aws ecr set-repository-policy \
+  --repository-name "$ECR_REPOSITORY" \
+  --policy-text "file://$REPO_POLICY_FILE" \
+  --region "$AWS_REGION" >/dev/null 2>&1; then
+  echo "Warning: could not set ECR repository policy automatically."
+  echo "If Lambda create/update fails, grant ecr:SetRepositoryPolicy or set this policy manually on repo ${ECR_REPOSITORY}."
+fi
+rm -f "$REPO_POLICY_FILE"
+
 echo "Logging into ECR: ${ECR_REGISTRY}"
 aws ecr get-login-password --region "$AWS_REGION" | docker login --username AWS --password-stdin "$ECR_REGISTRY" >/dev/null
 
