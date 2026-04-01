@@ -11,7 +11,7 @@ on:
 
   
 env:
-  AWS_REGION: us-east-1
+  AWS_REGION: ap-south-1
   S3_BUCKET: ${{ secrets.S3_BUCKET }}
 
 jobs:
@@ -135,6 +135,19 @@ jobs:
             echo "enabled=false" >> "$GITHUB_OUTPUT"
             echo "S3 access check failed (likely 403). Running in local-only mode."
           fi
+
+      - name: Align AWS region with S3 bucket
+        run: |
+          bucket_region="$(aws s3api get-bucket-location --bucket "$S3_BUCKET" --query 'LocationConstraint' --output text 2>/dev/null || echo '')"
+
+          # S3 returns 'None' for us-east-1 buckets.
+          if [ -z "$bucket_region" ] || [ "$bucket_region" = "None" ] || [ "$bucket_region" = "null" ]; then
+            bucket_region="us-east-1"
+          fi
+
+          echo "AWS_REGION=$bucket_region" >> "$GITHUB_ENV"
+          echo "AWS_DEFAULT_REGION=$bucket_region" >> "$GITHUB_ENV"
+          echo "Using AWS region from bucket: $bucket_region"
 
       - name: Download data from S3
         if: steps.s3_access.outputs.enabled == 'true'
