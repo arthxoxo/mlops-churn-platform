@@ -303,10 +303,15 @@ jobs:
             zip -qr "$ZIP_PATH" .
           )
 
+          TIMESTAMP="$(date +%Y%m%d%H%M%S)"
+          CODE_S3_KEY="lambda-artifacts/${FUNCTION_NAME}/drift-${TIMESTAMP}.zip"
+          aws s3 cp "$ZIP_PATH" "s3://${S3_BUCKET}/${CODE_S3_KEY}" --region "$AWS_REGION" >/dev/null
+
           if aws lambda get-function --function-name "$FUNCTION_NAME" --region "$AWS_REGION" >/dev/null 2>&1; then
             aws lambda update-function-code \
               --function-name "$FUNCTION_NAME" \
-              --zip-file "fileb://$ZIP_PATH" \
+              --s3-bucket "$S3_BUCKET" \
+              --s3-key "$CODE_S3_KEY" \
               --region "$AWS_REGION" >/dev/null
 
             aws lambda update-function-configuration \
@@ -327,7 +332,7 @@ jobs:
               --function-name "$FUNCTION_NAME" \
               --runtime python3.10 \
               --handler drift_handler.handler \
-              --zip-file "fileb://$ZIP_PATH" \
+              --code "S3Bucket=$S3_BUCKET,S3Key=$CODE_S3_KEY" \
               --role "$LAMBDA_ROLE_ARN" \
               --timeout 300 \
               --memory-size 512 \
