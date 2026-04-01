@@ -33,11 +33,22 @@ cp -R "$ROOT_DIR/models" "$PKG_DIR/models"
   zip -qr "$ZIP_PATH" .
 )
 
+if [[ -z "${S3_BUCKET:-}" ]]; then
+  echo "S3_BUCKET is required for Lambda code upload."
+  exit 1
+fi
+
+TIMESTAMP="$(date +%Y%m%d%H%M%S)"
+CODE_S3_KEY="lambda-artifacts/${FUNCTION_NAME}/fastapi-${TIMESTAMP}.zip"
+echo "Uploading Lambda package to s3://${S3_BUCKET}/${CODE_S3_KEY}"
+aws s3 cp "$ZIP_PATH" "s3://${S3_BUCKET}/${CODE_S3_KEY}" --region "$AWS_REGION" >/dev/null
+
 if aws lambda get-function --function-name "$FUNCTION_NAME" --region "$AWS_REGION" >/dev/null 2>&1; then
   echo "Updating existing Lambda function: $FUNCTION_NAME"
   aws lambda update-function-code \
     --function-name "$FUNCTION_NAME" \
-    --zip-file "fileb://$ZIP_PATH" \
+    --s3-bucket "$S3_BUCKET" \
+    --s3-key "$CODE_S3_KEY" \
     --region "$AWS_REGION" >/dev/null
 
   aws lambda update-function-configuration \
@@ -58,7 +69,7 @@ else
     --function-name "$FUNCTION_NAME" \
     --runtime "$RUNTIME" \
     --handler "$HANDLER" \
-    --zip-file "fileb://$ZIP_PATH" \
+    --code "S3Bucket=$S3_BUCKET,S3Key=$CODE_S3_KEY" \
     --role "$LAMBDA_ROLE_ARN" \
     --timeout "$TIMEOUT" \
     --memory-size "$MEMORY_SIZE" \
