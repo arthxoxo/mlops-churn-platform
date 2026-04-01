@@ -289,6 +289,7 @@ jobs:
         if: success() && github.ref == 'refs/heads/main' && env.LAMBDA_DEPLOY_ENABLED != 'false'
         env:
           FUNCTION_NAME: ${{ env.SERVING_FUNCTION_NAME || 'mlops-churn-fastapi' }}
+          ECR_REPOSITORY: ${{ env.ECR_REPOSITORY || 'mlops-churn-fastapi' }}
           LAMBDA_ROLE_ARN: ${{ env.LAMBDA_ROLE_ARN }}
         run: |
           bash lambda/deploy_fastapi_lambda.sh

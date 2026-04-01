@@ -1,0 +1,15 @@
+FROM public.ecr.aws/lambda/python:3.10
+
+# Install serving dependencies directly into Lambda task root.
+COPY lambda/requirements-serving.txt ./requirements-serving.txt
+RUN pip install --no-cache-dir -r requirements-serving.txt -t ${LAMBDA_TASK_ROOT}
+
+# Copy application code and model artifacts.
+COPY lambda/fastapi_handler.py ${LAMBDA_TASK_ROOT}/fastapi_handler.py
+COPY src/ ${LAMBDA_TASK_ROOT}/src/
+COPY models/ ${LAMBDA_TASK_ROOT}/models/
+
+# Keep model path explicit for runtime.
+ENV MODEL_DIR=models
+
+CMD ["fastapi_handler.handler"]
