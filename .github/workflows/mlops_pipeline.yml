@@ -258,13 +258,18 @@ jobs:
         run: |
           set -euo pipefail
 
-          # Validate basic Lambda permissions before packaging/deploy.
+          # Non-blocking probe: some IAM setups allow create/update without GetAccountSettings.
           if aws lambda get-account-settings --region "$AWS_REGION" >/dev/null 2>&1; then
-            echo "Lambda read permissions check passed."
+            echo "Lambda preflight probe passed."
           else
-            echo "Missing required Lambda permissions for deployment role/user."
-            echo "Need at least lambda:GetAccountSettings and create/update permissions."
-            exit 1
+            echo "Warning: lambda:GetAccountSettings not allowed for this identity."
+            echo "Proceeding to create/update steps; those are the source-of-truth checks."
+            echo "If deploy fails, grant these actions to CI identity:"
+            echo "  - lambda:GetFunction"
+            echo "  - lambda:CreateFunction"
+            echo "  - lambda:UpdateFunctionCode"
+            echo "  - lambda:UpdateFunctionConfiguration"
+            echo "  - iam:PassRole (for LAMBDA_ROLE_ARN)"
           fi
 
       - name: Auto-deploy FastAPI Lambda
