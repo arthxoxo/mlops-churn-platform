@@ -222,7 +222,10 @@ def main():
     # Print summary
     metrics = evaluation.get("metrics", {})
     for name, val in metrics.items():
-        logger.info(f"   {name}: {val['value']}")
+        if isinstance(val, dict) and "value" in val:
+            logger.info(f"   {name}: {val['value']}")
+        else:
+            logger.info(f"   {name}: {val}")
 
 
 if __name__ == "__main__":
