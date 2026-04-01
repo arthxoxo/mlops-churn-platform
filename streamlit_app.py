@@ -18,124 +18,220 @@ from sklearn.preprocessing import LabelEncoder
 API_URL = "http://localhost:8000"
 
 st.set_page_config(
-    page_title="Aurelia Churn Studio",
+    page_title="Northstar Churn Desk",
     page_icon="A",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
 st.markdown(
-    """
+        """
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700&family=DM+Serif+Display:ital@0;1&display=swap');
 
 :root {
-  --bg: #06131a;
-  --bg-2: #0b1f29;
-  --ink: #e8f0f2;
-  --muted: #9db2b8;
-  --accent: #00c2a8;
-  --accent-soft: #7de3d6;
-  --danger: #ff6b6b;
-  --gold: #d4a017;
-  --card: rgba(14, 35, 46, 0.66);
-  --border: rgba(125, 227, 214, 0.25);
+    --bg: #0f1724;
+    --bg-soft: #152337;
+    --surface: rgba(17, 27, 41, 0.74);
+    --surface-strong: rgba(15, 24, 37, 0.9);
+    --ink: #f2f6fc;
+    --muted: #9eb1c7;
+    --accent: #3aa4ff;
+    --accent-2: #7ce7ff;
+    --danger: #ff6f83;
+    --gold: #f5b955;
+    --border: rgba(124, 184, 255, 0.24);
 }
 
 html, body, [class*="css"] {
-  font-family: 'IBM Plex Sans', sans-serif;
+    font-family: 'Sora', sans-serif;
+    color: var(--ink);
 }
 
 [data-testid="stAppViewContainer"] {
-  background:
-    radial-gradient(700px 260px at 10% 0%, rgba(0, 194, 168, 0.16), transparent 60%),
-    radial-gradient(900px 380px at 100% 0%, rgba(212, 160, 23, 0.10), transparent 58%),
-    linear-gradient(165deg, var(--bg) 0%, var(--bg-2) 70%);
+    background:
+        radial-gradient(900px 430px at 6% -5%, rgba(58, 164, 255, 0.28), transparent 62%),
+        radial-gradient(760px 360px at 98% 8%, rgba(124, 231, 255, 0.16), transparent 58%),
+        radial-gradient(900px 420px at 48% 100%, rgba(40, 72, 115, 0.32), transparent 60%),
+        linear-gradient(168deg, #0a111c 0%, var(--bg) 58%, var(--bg-soft) 100%);
 }
 
 [data-testid="stSidebar"] {
-  background: rgba(6, 19, 26, 0.94);
-  border-right: 1px solid var(--border);
+    background: linear-gradient(180deg, #0a1321 0%, #0e1a2c 100%);
+    border-right: 1px solid rgba(124, 184, 255, 0.2);
+}
+
+[data-testid="stSidebar"] * {
+    color: #eef5ff !important;
 }
 
 h1, h2, h3, h4 {
-  font-family: 'Space Grotesk', sans-serif;
-  letter-spacing: 0.2px;
+    font-family: 'DM Serif Display', serif;
+    color: #f4f9ff;
+    letter-spacing: 0.2px;
 }
 
 .hero {
-  background: linear-gradient(120deg, rgba(0, 194, 168, 0.28), rgba(212, 160, 23, 0.20));
-  border: 1px solid var(--border);
-  border-radius: 18px;
-  padding: 1.25rem 1.4rem;
-  backdrop-filter: blur(7px);
-  animation: fade-up 0.7s ease-out;
+    background:
+        linear-gradient(130deg, rgba(58, 164, 255, 0.24), rgba(124, 231, 255, 0.08)),
+        var(--surface-strong);
+    border: 1px solid var(--border);
+    border-radius: 22px;
+    padding: 1.45rem 1.55rem;
+    box-shadow: 0 18px 42px rgba(0, 0, 0, 0.35);
+    animation: fade-up 0.65s ease-out;
 }
 
 .hero .title {
-  font-size: 1.8rem;
-  font-weight: 700;
-  color: var(--ink);
-  margin-bottom: 0.15rem;
+    font-size: 2.08rem;
+    color: #f4f9ff;
+    margin-bottom: 0.2rem;
 }
 
 .hero .subtitle {
-  color: var(--muted);
-  font-size: 0.98rem;
+    color: var(--muted);
+    font-size: 0.97rem;
 }
 
 .glass {
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 16px;
-  padding: 1rem 1rem 0.8rem 1rem;
-  animation: fade-up 0.65s ease-out;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    padding: 1rem 1rem 0.85rem 1rem;
+    backdrop-filter: blur(11px);
+    box-shadow: 0 12px 26px rgba(0, 0, 0, 0.22);
+    animation: fade-up 0.65s ease-out;
 }
 
-.kpi {
-  background: linear-gradient(140deg, rgba(0, 194, 168, 0.24), rgba(6, 19, 26, 0.4));
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  padding: 0.8rem;
+.kpi-card {
+    background: linear-gradient(155deg, rgba(58, 164, 255, 0.2), rgba(10, 18, 30, 0.76));
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 0.92rem 1rem;
+    min-height: 90px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    box-shadow: 0 8px 18px rgba(0, 0, 0, 0.3);
 }
 
-.risk-good { color: var(--accent-soft); font-weight: 700; }
+.kpi-label {
+    color: #9eb4ca;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-bottom: 0.35rem;
+}
+
+.kpi-value {
+    color: #f1f7ff;
+    font-size: 1.2rem;
+    font-weight: 700;
+}
+
+.section-kicker {
+    color: var(--accent-2);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    font-size: 0.7rem;
+    margin-top: 0.2rem;
+}
+
+.section-title {
+    margin-top: 0.1rem;
+    margin-bottom: 0;
+    font-size: 1.56rem;
+    color: #f4f9ff;
+}
+
+.section-subtitle {
+    margin-top: 0.2rem;
+    margin-bottom: 0.85rem;
+    color: var(--muted);
+    font-size: 0.94rem;
+}
+
+.risk-good { color: #68e3b5; font-weight: 700; }
 .risk-mid { color: var(--gold); font-weight: 700; }
 .risk-bad { color: var(--danger); font-weight: 700; }
 
+.status-pill {
+    display: inline-flex;
+    gap: 0.44rem;
+    align-items: center;
+    border-radius: 999px;
+    padding: 0.32rem 0.72rem;
+    border: 1px solid var(--border);
+    background: rgba(14, 24, 38, 0.85);
+    color: #e6f1ff;
+    font-size: 0.8rem;
+    margin-top: 0.62rem;
+}
+
+.status-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 999px;
+    background: #68e3b5;
+    box-shadow: 0 0 0 6px rgba(104, 227, 181, 0.16);
+}
+
+.status-dot.offline {
+    background: var(--danger);
+    box-shadow: 0 0 0 6px rgba(255, 111, 131, 0.16);
+}
+
 [data-testid="stMetric"] {
-  background: rgba(8, 28, 38, 0.72);
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  padding: 0.65rem;
+    background: rgba(20, 31, 47, 0.84);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 0.66rem;
 }
 
 .stButton > button {
-  border-radius: 999px;
-  border: 1px solid rgba(125, 227, 214, 0.45);
-  background: linear-gradient(90deg, #00c2a8, #12a48e);
-  color: #03241f;
-  font-weight: 700;
+    border-radius: 999px;
+    border: 1px solid rgba(124, 184, 255, 0.54);
+    background: linear-gradient(90deg, #2c8bf0, #42b3ff);
+    color: #ecf7ff;
+    font-weight: 700;
 }
 
 .stButton > button:hover {
-  border-color: #7de3d6;
-  box-shadow: 0 0 0 3px rgba(125, 227, 214, 0.20);
+    border-color: #7ce7ff;
+    box-shadow: 0 0 0 3px rgba(58, 164, 255, 0.2);
+}
+
+[data-testid="stDataFrame"] {
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.24);
+}
+
+@media (max-width: 900px) {
+    .hero .title {
+        font-size: 1.6rem;
+    }
+
+    .section-title {
+        font-size: 1.23rem;
+    }
 }
 
 @keyframes fade-up {
-  from {
-    opacity: 0;
-    transform: translateY(12px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+    from {
+        opacity: 0;
+        transform: translateY(12px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 </style>
 """,
-    unsafe_allow_html=True,
+        unsafe_allow_html=True,
 )
 
 
@@ -205,6 +301,32 @@ def risk_label(probability: float) -> str:
     return "LOW"
 
 
+def render_section_heading(title: str, subtitle: str, kicker: str = "") -> None:
+        kicker_html = f"<div class='section-kicker'>{kicker}</div>" if kicker else ""
+        st.markdown(
+                f"""
+<div>
+    {kicker_html}
+    <h2 class='section-title'>{title}</h2>
+    <p class='section-subtitle'>{subtitle}</p>
+</div>
+""",
+                unsafe_allow_html=True,
+        )
+
+
+def render_kpi_card(label: str, value: str):
+        st.markdown(
+                f"""
+<div class="kpi-card">
+    <div class="kpi-label">{label}</div>
+    <div class="kpi-value">{value}</div>
+</div>
+""",
+                unsafe_allow_html=True,
+        )
+
+
 def transform_raw_telco_csv(df: pd.DataFrame, expected_features: List[str]) -> pd.DataFrame:
     """Transform raw Telco CSV into model-ready numeric feature matrix."""
     transformed = df.copy()
@@ -243,8 +365,8 @@ def transform_raw_telco_csv(df: pd.DataFrame, expected_features: List[str]) -> p
 
 
 with st.sidebar:
-    st.markdown("### Aurelia Churn Studio")
-    st.caption("Premium inference cockpit")
+    st.markdown("### Northstar Churn Desk")
+    st.caption("High-signal retention intelligence")
     page = st.radio(
         "Navigate",
         ["Dashboard", "Single Prediction", "Batch Prediction", "Model Profile"],
@@ -254,12 +376,20 @@ with st.sidebar:
     st.caption("API Endpoint")
     st.code(API_URL)
 
+health = get_health()
+features = get_features()
+feature_count = len(features) if features else 19
+
+status_text = "API ONLINE" if health else "API OFFLINE"
+status_class = "status-dot" if health else "status-dot offline"
+
 
 st.markdown(
-    """
+    f"""
 <div class="hero">
-  <div class="title">Aurelia Churn Studio</div>
-  <div class="subtitle">Realtime churn intelligence with production-grade API orchestration.</div>
+    <div class="title">Northstar Churn Desk</div>
+    <div class="subtitle">Signal-driven retention intelligence for production decisioning.</div>
+  <div class="status-pill"><span class="{status_class}"></span>{status_text}</div>
 </div>
 """,
     unsafe_allow_html=True,
@@ -267,20 +397,26 @@ st.markdown(
 
 st.write("")
 
-health = get_health()
-features = get_features()
-feature_count = len(features) if features else 19
-
 if page == "Dashboard":
     if not health:
         st.error("API is offline. Start FastAPI server on localhost:8000 first.")
     else:
+        render_section_heading(
+            "Command Overview",
+            "Track serving health, model quality, and production readiness at a glance.",
+            kicker="Live Operations",
+        )
         metrics = health.get("metrics", {})
+
         c1, c2, c3, c4 = st.columns(4)
-        c1.metric("Service", "Online", "Healthy")
-        c2.metric("Accuracy", f"{metrics.get('accuracy', 0.0):.2%}")
-        c3.metric("ROC-AUC", f"{metrics.get('roc_auc', 0.0):.2%}")
-        c4.metric("F1 Score", f"{metrics.get('f1_score', 0.0):.4f}")
+        with c1:
+            render_kpi_card("Service Status", "Online")
+        with c2:
+            render_kpi_card("Accuracy", f"{metrics.get('accuracy', 0.0):.2%}")
+        with c3:
+            render_kpi_card("ROC-AUC", f"{metrics.get('roc_auc', 0.0):.2%}")
+        with c4:
+            render_kpi_card("F1 Score", f"{metrics.get('f1_score', 0.0):.4f}")
 
         st.write("")
         left, right = st.columns([1.2, 1])
@@ -313,11 +449,12 @@ if page == "Dashboard":
 
 
 elif page == "Single Prediction":
-    st.subheader("Single Prediction")
-    st.caption(
-        "Use quick profile presets or provide an exact numeric vector. "
-        f"Expected features: {feature_count}."
+    render_section_heading(
+        "Single Prediction",
+        "Use profile presets for speed or a custom vector for precision scoring.",
+        kicker="Realtime Inference",
     )
+    st.caption(f"Expected features: {feature_count}.")
 
     mode = st.segmented_control(
         "Input mode", ["Preset Profile", "Manual Vector"], default="Preset Profile"
@@ -396,7 +533,11 @@ elif page == "Single Prediction":
 
 
 elif page == "Batch Prediction":
-    st.subheader("Batch Prediction")
+    render_section_heading(
+        "Batch Prediction",
+        "Upload customer cohorts and score churn risk in one premium batch flow.",
+        kicker="Portfolio Scoring",
+    )
     mode = st.radio(
         "CSV Type",
         ["Raw Telco CSV (with original columns)", "Numeric Feature CSV"],
@@ -498,7 +639,11 @@ elif page == "Batch Prediction":
 
 
 elif page == "Model Profile":
-    st.subheader("Model Profile")
+    render_section_heading(
+        "Model Profile",
+        "Explore the deployed model's operating profile and feature interface.",
+        kicker="Model Intelligence",
+    )
     left, right = st.columns([1, 1])
 
     with left:
@@ -526,4 +671,4 @@ elif page == "Model Profile":
 
 
 st.write("")
-st.caption("Aurelia Churn Studio - premium UI layer for the local churn inference API")
+st.caption("Northstar Churn Desk - premium UI layer for the local churn inference API")
