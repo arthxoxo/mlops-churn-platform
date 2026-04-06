@@ -43,26 +43,55 @@ cat > "$REPO_POLICY_FILE" <<EOF
   "Version": "2008-10-17",
   "Statement": [
     {
-      "Sid": "AllowLambdaServicePull",
+      "Sid": "LambdaECRImageRetrievalPolicy",
       "Effect": "Allow",
       "Principal": {
         "Service": "lambda.amazonaws.com"
       },
       "Action": [
+        "ecr:BatchCheckLayerAvailability",
         "ecr:BatchGetImage",
         "ecr:GetDownloadUrlForLayer"
+      ],
+      "Condition": {
+        "StringLike": {
+          "aws:sourceArn": "arn:aws:lambda:${AWS_REGION}:${ACCOUNT_ID}:function:*"
+        },
+        "StringEquals": {
+          "aws:sourceAccount": "${ACCOUNT_ID}"
+        }
       ]
     }
   ]
 }
 EOF
 
-if ! aws ecr set-repository-policy \
+set_policy_ok="false"
+if aws ecr set-repository-policy \
   --repository-name "$ECR_REPOSITORY" \
   --policy-text "file://$REPO_POLICY_FILE" \
   --region "$AWS_REGION" >/dev/null 2>&1; then
-  echo "Warning: could not set ECR repository policy automatically."
-  echo "If Lambda create/update fails, grant ecr:SetRepositoryPolicy or set this policy manually on repo ${ECR_REPOSITORY}."
+  set_policy_ok="true"
+fi
+
+if [[ "$set_policy_ok" != "true" ]]; then
+  echo "Could not update ECR repository policy automatically (missing ecr:SetRepositoryPolicy?)."
+  echo "Checking whether an existing policy already allows Lambda pulls..."
+
+  existing_policy="$(aws ecr get-repository-policy --repository-name "$ECR_REPOSITORY" --region "$AWS_REGION" --query 'policyText' --output text 2>/dev/null || true)"
+  if [[ "$existing_policy" == *"lambda.amazonaws.com"* ]] && [[ "$existing_policy" == *"ecr:BatchGetImage"* ]] && [[ "$existing_policy" == *"ecr:GetDownloadUrlForLayer"* ]]; then
+    echo "Existing ECR policy appears to allow Lambda image pulls. Continuing."
+  else
+    echo "ERROR: ECR policy does not allow Lambda to pull image from ${ECR_REPOSITORY}."
+    echo "Grant CI identity these permissions, then rerun:"
+    echo "  - ecr:GetRepositoryPolicy"
+    echo "  - ecr:SetRepositoryPolicy"
+    echo "Or manually set repository policy to include lambda.amazonaws.com with actions:"
+    echo "  - ecr:BatchGetImage"
+    echo "  - ecr:GetDownloadUrlForLayer"
+    rm -f "$REPO_POLICY_FILE"
+    exit 1
+  fi
 fi
 rm -f "$REPO_POLICY_FILE"
 
