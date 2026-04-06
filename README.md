@@ -192,6 +192,68 @@ aws lambda add-permission \
 
 After that, open /docs on the Function URL to access Swagger.
 
+### 8c. Required IAM + ECR permissions for image-based Lambda deploys
+
+If your workflow fails with `AccessDeniedException` during `CreateFunction` and mentions ECR access, the CI principal cannot validate/update the ECR repository policy.
+
+At minimum, grant the CI principal these actions on the target ECR repository:
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "AllowReadWriteEcrRepositoryPolicy",
+      "Effect": "Allow",
+      "Action": [
+        "ecr:GetRepositoryPolicy",
+        "ecr:SetRepositoryPolicy"
+      ],
+      "Resource": "arn:aws:ecr:ap-south-1:<ACCOUNT_ID>:repository/<ECR_REPOSITORY>"
+    }
+  ]
+}
+```
+
+Also ensure the ECR repository policy allows Lambda pulls:
+
+```json
+{
+  "Version": "2008-10-17",
+  "Statement": [
+    {
+      "Sid": "LambdaECRImageRetrievalPolicy",
+      "Effect": "Allow",
+      "Principal": {
+        "Service": "lambda.amazonaws.com"
+      },
+      "Action": [
+        "ecr:BatchCheckLayerAvailability",
+        "ecr:BatchGetImage",
+        "ecr:GetDownloadUrlForLayer"
+      ],
+      "Condition": {
+        "StringLike": {
+          "aws:sourceArn": "arn:aws:lambda:ap-south-1:<ACCOUNT_ID>:function:*"
+        },
+        "StringEquals": {
+          "aws:sourceAccount": "<ACCOUNT_ID>"
+        }
+      }
+    }
+  ]
+}
+```
+
+Optional but recommended for CI image build/push flows:
+
+- `ecr:DescribeRepositories`
+- `ecr:GetAuthorizationToken`
+- `ecr:InitiateLayerUpload`
+- `ecr:UploadLayerPart`
+- `ecr:CompleteLayerUpload`
+- `ecr:PutImage`
+
 ### 9. Deploy Lambda drift monitor
 
 ```bash

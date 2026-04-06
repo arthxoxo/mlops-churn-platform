@@ -1,0 +1,14 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "AllowReadWriteEcrRepositoryPolicy",
+      "Effect": "Allow",
+      "Action": [
+        "ecr:GetRepositoryPolicy",
+        "ecr:SetRepositoryPolicy"
+      ],
+      "Resource": "arn:aws:ecr:ap-south-1:<ACCOUNT_ID>:repository/<ECR_REPOSITORY>"
+    }
+  ]
+}

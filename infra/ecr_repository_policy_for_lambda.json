@@ -1,0 +1,25 @@
+{
+  "Version": "2008-10-17",
+  "Statement": [
+    {
+      "Sid": "LambdaECRImageRetrievalPolicy",
+      "Effect": "Allow",
+      "Principal": {
+        "Service": "lambda.amazonaws.com"
+      },
+      "Action": [
+        "ecr:BatchCheckLayerAvailability",
+        "ecr:BatchGetImage",
+        "ecr:GetDownloadUrlForLayer"
+      ],
+      "Condition": {
+        "StringLike": {
+          "aws:sourceArn": "arn:aws:lambda:ap-south-1:<ACCOUNT_ID>:function:*"
+        },
+        "StringEquals": {
+          "aws:sourceAccount": "<ACCOUNT_ID>"
+        }
+      }
+    }
+  ]
+}
