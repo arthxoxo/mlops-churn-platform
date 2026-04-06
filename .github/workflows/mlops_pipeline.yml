@@ -286,6 +286,8 @@ jobs:
           fi
 
       - name: Auto-deploy FastAPI Lambda
+        id: fastapi_lambda_deploy
+        continue-on-error: true
         if: success() && github.ref == 'refs/heads/main' && env.LAMBDA_DEPLOY_ENABLED != 'false'
         env:
           FUNCTION_NAME: ${{ env.SERVING_FUNCTION_NAME || 'mlops-churn-fastapi' }}
@@ -294,6 +296,20 @@ jobs:
         run: |
           bash lambda/deploy_fastapi_lambda.sh
           echo "Serving Lambda deployed: ${FUNCTION_NAME}"
+
+      - name: FastAPI Lambda deploy status
+        if: always() && github.ref == 'refs/heads/main' && env.LAMBDA_DEPLOY_ENABLED != 'false'
+        run: |
+          if [ "${{ steps.fastapi_lambda_deploy.outcome }}" = "success" ]; then
+            echo "FastAPI Lambda deploy succeeded."
+          else
+            echo "Warning: FastAPI Lambda deploy skipped/failed (non-blocking)."
+            echo "Most common cause: missing ECR policy permissions for CI identity."
+            echo "Required IAM actions on repository:"
+            echo "  - ecr:GetRepositoryPolicy"
+            echo "  - ecr:SetRepositoryPolicy"
+            echo "See infra/iam_ci_ecr_policy_minimum.json and infra/ecr_repository_policy_for_lambda.json"
+          fi
 
       - name: Deploy/Update Drift Monitor Lambda
         if: success() && github.ref == 'refs/heads/main' && env.LAMBDA_DEPLOY_ENABLED != 'false'
