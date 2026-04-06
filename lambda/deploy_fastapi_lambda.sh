@@ -145,12 +145,35 @@ if aws lambda get-function --function-name "$FUNCTION_NAME" --region "$AWS_REGIO
     --image-uri "$IMAGE_URI" \
     --region "$AWS_REGION" >/dev/null
 
-  aws lambda update-function-configuration \
+  # update-function-code is async; wait until Lambda is ready for config changes.
+  aws lambda wait function-updated \
     --function-name "$FUNCTION_NAME" \
-    --timeout "$TIMEOUT" \
-    --memory-size "$MEMORY_SIZE" \
-    --environment "Variables={MODEL_DIR=models}" \
-    --region "$AWS_REGION" >/dev/null
+    --region "$AWS_REGION"
+
+  config_updated="false"
+  for i in 1 2 3 4 5; do
+    if aws lambda update-function-configuration \
+      --function-name "$FUNCTION_NAME" \
+      --timeout "$TIMEOUT" \
+      --memory-size "$MEMORY_SIZE" \
+      --environment "Variables={MODEL_DIR=models}" \
+      --region "$AWS_REGION" >/dev/null; then
+      config_updated="true"
+      break
+    fi
+
+    echo "Config update busy, retry $i/5..."
+    sleep $((i * 5))
+  done
+
+  if [[ "$config_updated" != "true" ]]; then
+    echo "Failed to update Lambda configuration after retries."
+    exit 1
+  fi
+
+  aws lambda wait function-updated \
+    --function-name "$FUNCTION_NAME" \
+    --region "$AWS_REGION"
 else
   echo "Creating new image-based Lambda function: ${FUNCTION_NAME}"
   aws lambda create-function \
